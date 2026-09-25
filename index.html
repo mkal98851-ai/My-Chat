@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark" data-site-theme="classic-green">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>MyChat</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -47,7 +47,7 @@
 html,body{height:100%;}
 body{
   font-family:'Poppins','Noto Sans Devanagari',sans-serif; background:var(--shell-bg); color:var(--text-main);
-  display:flex; height:100vh; height:100dvh; overflow:hidden; transition:background .2s,color .2s;
+  display:flex; height:100vh; height:100dvh; height:var(--app-height, 100dvh); overflow:hidden; transition:background .2s,color .2s;
 }
 
 .mobile-menu-btn{
@@ -120,10 +120,10 @@ body{
 .admin-tab.unlocked-active{ background:var(--accent); color:#1a1204; }
 .tab-del-btn{
   width:34px; height:34px; border-radius:50%; border:1px solid var(--border); background:var(--card-bg);
-  color:var(--danger); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px;
-  margin-left:auto; flex-shrink:0;
+  color:var(--accent); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px;
+  margin-left:auto; flex-shrink:0; transition:background .15s,border-color .15s;
 }
-.tab-del-btn:hover{ background:var(--danger); color:#fff; }
+.tab-del-btn:hover{ background:rgba(var(--accent-rgb),0.16); border-color:var(--accent); }
 
 .view{ flex:1; min-height:0; display:none; flex-direction:column; }
 .view.active{ display:flex; }
@@ -134,8 +134,8 @@ body{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:30px;
 }
 .placeholder-panel i{ font-size:38px; color:var(--text-muted); opacity:.6; }
-.placeholder-panel.restricted{ border-color:var(--admin-color); }
-.placeholder-panel.restricted i{ color:var(--admin-color); opacity:1; background:var(--admin-color-bg); width:74px; height:74px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px;}
+.placeholder-panel.restricted{ border-color:var(--accent); cursor:pointer; }
+.placeholder-panel.restricted i{ color:var(--accent); opacity:1; background:rgba(var(--accent-rgb),0.12); width:74px; height:74px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px;}
 .placeholder-panel h3{ font-size:16px; }
 .placeholder-panel p{ font-size:12.5px; color:var(--text-muted); max-width:260px; }
 
@@ -260,15 +260,18 @@ body{
 }
 .theme-swatch .sw-dot{ width:26px; height:26px; border-radius:50%; }
 .theme-swatch.active{ border-color:var(--accent); color:var(--text-main); }
-.settings-danger-btn{
-  width:100%; margin-top:6px; background:rgba(255,90,90,0.1); border:1px solid var(--danger); color:var(--danger);
+.settings-action-btn{
+  width:100%; margin-top:6px; background:rgba(var(--accent-rgb),0.10); border:1px solid var(--accent); color:var(--accent);
   padding:9px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;
+  display:flex; align-items:center; justify-content:center; gap:7px; transition:background .15s;
 }
+.settings-action-btn i{ font-size:12px; }
+.settings-action-btn:hover{ background:rgba(var(--accent-rgb),0.2); }
 .pass-input{
   width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); border-radius:10px;
   padding:12px; font-family:var(--mono); font-size:18px; letter-spacing:.25em; text-align:center; margin-bottom:12px;
 }
-.pass-input:focus{ outline:none; border-color:var(--admin-color); }
+.pass-input:focus{ outline:none; border-color:var(--accent); }
 .pass-error{ font-size:12px; color:var(--danger); text-align:center; margin-bottom:8px; min-height:14px; }
 .btn{ background:var(--accent); color:#1a1204; border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; width:100%;}
 .btn.ghost{ background:none; border:1px solid var(--border); color:var(--text-main); margin-top:8px; }
@@ -310,7 +313,7 @@ body{
 
 <!-- ============================== SIDEBAR ============================== -->
 <div id="sidebar">
-  <div class="sb-pagecount" id="pageCounter">1/6</div>
+  <div class="sb-pagecount" id="pageCounter" style="display:none;">1/6</div>
   <div class="sb-logo"><div class="logo-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="logo-text">MyChat</div></div>
 
   <button class="nav-item active" id="navClipboard" data-section="clipboard"><i class="fa-regular fa-clipboard"></i><span>Clipboard</span></button>
@@ -319,7 +322,6 @@ body{
   <div class="nav-sep"></div>
   <button class="nav-item" id="navSettings"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
 
-  <div class="sb-tagline">Simple<br>Connect<br>Share</div>
 </div>
 
 <!-- ============================== MAIN ============================== -->
@@ -412,14 +414,15 @@ body{
       <div class="theme-swatch" data-preset="rose-quartz"><div class="sw-dot" style="background:linear-gradient(135deg,#f43f5e,#fda4af);"></div>Rose</div>
       <div class="theme-swatch" data-preset="amethyst-royale"><div class="sw-dot" style="background:linear-gradient(135deg,#8b5cf6,#d8b4fe);"></div>Amethyst</div>
     </div>
-    <button class="settings-danger-btn" id="masterDeleteBtn"><i class="fa-solid fa-broom"></i> Clear All Clipboard Pages</button>
+    <button class="settings-action-btn" id="masterDeleteBtn"><i class="fa-solid fa-broom"></i> Clear All Clipboard Pages</button>
+    <button class="settings-action-btn" id="chatMasterDeleteBtn"><i class="fa-solid fa-broom"></i> Clear All Chat Rooms</button>
   </div>
 </div>
 
 <!-- ===== ADMIN PASSWORD MODAL ===== -->
 <div class="modal-backdrop" id="adminModal">
   <div class="modal-card">
-    <h3><span><i class="fa-solid fa-lock" style="color:var(--admin-color);"></i> Admin Access</span> <span class="close-x" id="adminModalClose">✕</span></h3>
+    <h3><span><i class="fa-solid fa-lock" style="color:var(--accent);"></i> Admin Access</span> <span class="close-x" id="adminModalClose">✕</span></h3>
     <input type="password" class="pass-input" id="adminPassInput" maxlength="12" inputmode="numeric" placeholder="••••">
     <div class="pass-error" id="adminPassError"></div>
     <button class="btn" id="adminPassSubmit">Unlock</button>
@@ -441,10 +444,36 @@ body{
 /* ============================================================
    SHARED SHELL LOGIC — theme, navigation, settings, admin gate
    ============================================================ */
+/* ---- keep layout pinned to the real visible area when the on-screen keyboard opens
+   (fallback for browsers that don't yet honor viewport-meta interactive-widget) ---- */
+function syncAppHeight(){
+  const h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+  document.documentElement.style.setProperty('--app-height', h + 'px');
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', syncAppHeight);
+  window.visualViewport.addEventListener('scroll', syncAppHeight);
+}
+window.addEventListener('resize', syncAppHeight);
+syncAppHeight();
+
 const ADMIN_PASSWORD = '6261';
 window.currentSection = 'clipboard';      // 'clipboard' | 'chatroom'
-window.adminUnlocked = (sessionStorage.getItem('mychat_admin_unlocked') === '1');
+window.adminUnlocked = false;             // always locked on load / on exit — password required every time
+sessionStorage.removeItem('mychat_admin_unlocked');
 window.pendingAdminTarget = null;         // { section }
+
+/* ---- re-lock Admin as soon as it's exited (page/room change or section switch) ---- */
+function lockAdmin(){
+  if(!window.adminUnlocked) return;
+  window.adminUnlocked = false;
+  sessionStorage.removeItem('mychat_admin_unlocked');
+  const clipAdminTab = document.querySelector('#clipTabsRow .admin-tab');
+  const chatAdminTab = document.querySelector('#chatTabsRow .admin-tab');
+  if(clipAdminTab) clipAdminTab.classList.remove('unlocked-active');
+  if(chatAdminTab) chatAdminTab.classList.remove('unlocked-active');
+}
+window.lockAdmin = lockAdmin;
 
 /* ---- theme (light/dark) ---- */
 function applyTheme(theme){
@@ -493,7 +522,6 @@ adminModal.addEventListener('click', (e) => { if(e.target === adminModal) closeA
 function submitAdminPass(){
   if(adminPassInput.value.trim() === ADMIN_PASSWORD){
     window.adminUnlocked = true;
-    sessionStorage.setItem('mychat_admin_unlocked', '1');
     const target = window.pendingAdminTarget;
     adminModal.classList.remove('show');
     window.pendingAdminTarget = null;
@@ -519,6 +547,10 @@ const panelIcon = document.getElementById('panelIcon');
 const panelTitle = document.getElementById('panelTitle');
 
 function switchSection(section){
+  if(section !== window.currentSection){
+    if(window.currentSection === 'clipboard' && window.__clipCurrentPage && window.__clipCurrentPage() === 'Admin' && window.__clipSelectPage) window.__clipSelectPage('1');
+    if(window.currentSection === 'chatroom' && window.__chatCurrentPage && window.__chatCurrentPage() === 'Admin' && window.__chatSelectRoom) window.__chatSelectRoom('1');
+  }
   window.currentSection = section;
   navClipboard.classList.toggle('active', section === 'clipboard');
   navChatRoom.classList.toggle('active', section === 'chatroom');
@@ -591,6 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const status = document.getElementById('status');
   const clipContentBox = document.getElementById('clipContentBox');
   const clipLockedPanel = document.getElementById('clipLockedPanel');
+  clipLockedPanel.addEventListener('click', () => openAdminGate('clipboard'));
   const copyBtn = document.getElementById('copyBtn');
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
@@ -688,6 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if(page === currentPage && clipContentBox.style.display !== 'none') return;
+    if(currentPage === 'Admin' && page !== 'Admin') window.lockAdmin();
     flushPendingHistory();
     loadPage(page);
   }
@@ -943,7 +977,9 @@ function renderReplyQuoteHtml(replyTo){
 /* ---------- unified room selection (replaces old entry/chatScreen flow) ---------- */
 const chatEmptyPanel = document.getElementById('chatEmptyPanel');
 const chatLockedPanel = document.getElementById('chatLockedPanel');
+chatLockedPanel.addEventListener('click', () => openAdminGate('chatroom'));
 const chatMessagesWrap = document.getElementById('chatMessages');
+const messagesEl = chatMessagesWrap;
 const chatBoxEl = document.getElementById('chatBox');
 const composerEl = document.getElementById('composer');
 const chatTabButtons = document.querySelectorAll('#chatTabsRow .page-tab');
@@ -971,6 +1007,7 @@ function selectChatRoom(key){
     openAdminGate('chatroom');
     return;
   }
+  if(currentChatKey === 'Admin' && key !== 'ADMIN') window.lockAdmin();
   setActiveChatTabUI(key);
   leaveRoom();
   const code = (key === 'ADMIN') ? 'ADMIN' : String(parseInt(key,10)).padStart(2,'0');
@@ -979,9 +1016,6 @@ function selectChatRoom(key){
   joinRoomInternal(code, () => { showToast('Connection issue — retrying...'); });
 }
 window.__chatSelectRoom = selectChatRoom;
-chatTabButtons.forEach(btn => btn.addEventListener('click', () => selectChatRoom(btn.dataset.room)));
-selectChatRoom('1');
-
 function joinRoomInternal(code, onError){
   messagesRef = db.ref('rooms/' + code + '/messages');
   participantsRef = db.ref('rooms/' + code + '/participants');
@@ -1042,7 +1076,25 @@ document.getElementById('chatDeleteBtn').addEventListener('click', () => {
   }).catch((err) => console.error(err));
 });
 
-const messagesEl = document.getElementById('chatMessages');
+/* master clear (settings panel) — rooms 1-5 only, Admin room is never touched */
+const CHAT_MASTER_CLEAR_ROOMS = ['01','02','03','04','05'];
+document.getElementById('chatMasterDeleteBtn').addEventListener('click', () => {
+  if(!confirm('Clear chat (messages + files) in rooms 1-5? Admin room will not be affected. This cannot be undone.')) return;
+  const jobs = [];
+  CHAT_MASTER_CLEAR_ROOMS.forEach((code) => {
+    jobs.push(db.ref('rooms/' + code + '/messages').remove());
+    jobs.push(db.ref('rooms/' + code + '/fileChunks').remove());
+  });
+  Promise.all(jobs).then(() => {
+    if(CHAT_MASTER_CLEAR_ROOMS.includes(roomCode)){
+      document.getElementById('chatMessages').innerHTML = '';
+      seenMessageIds.clear();
+    }
+    showToast('All chat rooms cleared (Admin untouched)!');
+    closeSettings();
+  }).catch((err) => { console.error(err); showToast('Error clearing chat rooms'); });
+});
+
 function addSysMessage(text, id){
   const row = document.createElement('div'); row.className = 'msg-row sys'; if(id) row.id = 'msgrow-' + id;
   row.innerHTML = '<div class="sys-note">' + escapeHtml(text) + '</div>'; messagesEl.appendChild(row); scrollToBottom();
@@ -1166,8 +1218,7 @@ function wireImageGrid(id, entries){
 
 function sendImageGroup(files){
   if(!messagesRef){ showToast('No room joined'); return; }
-  const id = 'local' + Date.now();
-  const groupId = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
+  const msgRef = messagesRef.push(); const id = msgRef.key; seenMessageIds.add(id);
   const localUrls = files.map(f => URL.createObjectURL(f));
   const row = document.createElement('div');
   row.className = 'msg-row me'; row.id = 'msgrow-' + id;
@@ -1191,7 +1242,6 @@ function sendImageGroup(files){
     });
   });
   chain.then(() => {
-    const msgRef = messagesRef.push(); const msgId = msgRef.key; seenMessageIds.add(msgId);
     return msgRef.set({ type:'imagegroup', sender: myId, images, time: nowTime() });
   }).catch((err) => { console.error(err); showToast('Error sending images'); });
 }
@@ -1300,6 +1350,12 @@ function addFileBubble(id, msg){
     card.appendChild(dlBtn);
   }).catch((err) => console.error(err));
 }
+
+/* wire up room tabs and auto-open room 1 — done last, after every other
+   const/function above this point has been initialized, so nothing here
+   can be called before it exists. */
+chatTabButtons.forEach(btn => btn.addEventListener('click', () => selectChatRoom(btn.dataset.room)));
+selectChatRoom('1');
 </script>
 </body>
 </html>
