@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-site-theme="classic-green">
+<html lang="en" data-theme="dark" data-site-theme="onyx-green">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
@@ -430,12 +430,12 @@ body{
     </div>
     <div class="set-label" style="margin-bottom:10px;">Website Theme</div>
     <div class="theme-grid" id="themeGrid">
-      <div class="theme-swatch active" data-preset="classic-green"><div class="sw-dot" style="background:linear-gradient(135deg,#4caf50,#81c784);"></div>Green</div>
+      <div class="theme-swatch" data-preset="classic-green"><div class="sw-dot" style="background:linear-gradient(135deg,#4caf50,#81c784);"></div>Green</div>
       <div class="theme-swatch" data-preset="midnight-gold"><div class="sw-dot" style="background:linear-gradient(135deg,#d4af37,#f5d78e);"></div>Gold</div>
       <div class="theme-swatch" data-preset="sapphire-noir"><div class="sw-dot" style="background:linear-gradient(135deg,#3b82f6,#93c5fd);"></div>Sapphire</div>
       <div class="theme-swatch" data-preset="rose-quartz"><div class="sw-dot" style="background:linear-gradient(135deg,#f43f5e,#fda4af);"></div>Rose</div>
       <div class="theme-swatch" data-preset="amethyst-royale"><div class="sw-dot" style="background:linear-gradient(135deg,#8b5cf6,#d8b4fe);"></div>Amethyst</div>
-      <div class="theme-swatch" data-preset="onyx-green"><div class="sw-dot" style="background:linear-gradient(135deg,#0a0a0a,#22c55e);"></div>Onyx Green</div>
+      <div class="theme-swatch active" data-preset="onyx-green"><div class="sw-dot" style="background:linear-gradient(135deg,#0a0a0a,#22c55e);"></div>Onyx Green</div>
       <div class="theme-swatch" data-preset="onyx-gold"><div class="sw-dot" style="background:linear-gradient(135deg,#0a0a0a,#d4af37);"></div>Onyx Gold</div>
       <div class="theme-swatch" data-preset="onyx-sapphire"><div class="sw-dot" style="background:linear-gradient(135deg,#0a0a0a,#3b82f6);"></div>Onyx Sapphire</div>
       <div class="theme-swatch" data-preset="onyx-rose"><div class="sw-dot" style="background:linear-gradient(135deg,#0a0a0a,#f43f5e);"></div>Onyx Rose</div>
@@ -519,7 +519,7 @@ function applySitePreset(preset){
   localStorage.setItem('mychat_site_theme', preset);
   document.querySelectorAll('.theme-swatch').forEach(sw => sw.classList.toggle('active', sw.dataset.preset === preset));
 }
-applySitePreset(localStorage.getItem('mychat_site_theme') || 'classic-green');
+applySitePreset(localStorage.getItem('mychat_site_theme') || 'onyx-green');
 document.querySelectorAll('.theme-swatch').forEach(sw => {
   sw.addEventListener('click', () => applySitePreset(sw.dataset.preset));
 });
