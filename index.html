@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-site-theme="classic-green">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MyChat</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+/* ============================================================
+   SHELL DESIGN TOKENS (bridge vars used by both embedded apps)
+   ============================================================ */
+:root{
+  --shell-bg:#0b1220; --sidebar-bg:#0d1520; --panel-bg:#111a26; --card-bg:#16202e;
+  --border:#223247; --text-main:#e8edf3; --text-muted:#8798ab;
+  --success:#3ddc84; --danger:#ff5a5a; --admin-color:#f5b94d; --admin-color-bg:rgba(245,185,77,0.12);
+
+  --accent:#4caf50; --accent-2:#81c784; --accent-rgb:76,175,80;
+
+  /* -- Clipboard app bridge vars -- */
+  --bg-color: var(--shell-bg); --primary-green: var(--accent);
+  --info-bg: rgba(var(--accent-rgb),0.10); --border-color: var(--border);
+  --nav-bg: var(--card-bg); --nav-active-bg: rgba(var(--accent-rgb),0.16);
+  --danger-color: var(--danger);
+
+  /* -- Chat app bridge vars -- */
+  --bg: var(--shell-bg); --panel: var(--card-bg); --line: var(--border);
+  --signal: var(--accent); --ok: var(--success);
+  --bubble-me: var(--accent); --bubble-me-text:#1a1204;
+  --bubble-them: var(--panel-bg); --text: var(--text-main); --text-dim: var(--text-muted);
+  --mono:'SFMono-Regular',Consolas,'Roboto Mono',monospace;
+}
+[data-theme="light"]{
+  --shell-bg:#eef1f7; --sidebar-bg:#ffffff; --panel-bg:#ffffff; --card-bg:#ffffff;
+  --border:#e2e6ee; --text-main:#1b2330; --text-muted:#6b7688;
+  --bubble-me-text:#ffffff; --bubble-them:#eef1f7;
+}
+[data-site-theme="classic-green"]{ --accent:#4caf50; --accent-2:#81c784; --accent-rgb:76,175,80; }
+[data-site-theme="midnight-gold"]{ --accent:#d4af37; --accent-2:#f5d78e; --accent-rgb:212,175,55; }
+[data-site-theme="sapphire-noir"]{ --accent:#3b82f6; --accent-2:#93c5fd; --accent-rgb:59,130,246; }
+[data-site-theme="rose-quartz"]{ --accent:#f43f5e; --accent-2:#fda4af; --accent-rgb:244,63,94; }
+[data-site-theme="amethyst-royale"]{ --accent:#8b5cf6; --accent-2:#d8b4fe; --accent-rgb:139,92,246; }
+
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:'Poppins','Noto Sans Devanagari',sans-serif; background:var(--shell-bg); color:var(--text-main);
+  display:flex; height:100vh; height:100dvh; overflow:hidden; transition:background .2s,color .2s;
+}
+
+.mobile-menu-btn{
+  display:none; width:38px; height:38px; border-radius:50%; background:var(--card-bg); border:1px solid var(--border);
+  color:var(--text-main); align-items:center; justify-content:center; cursor:pointer; font-size:16px; flex-shrink:0;
+}
+#sidebarBackdrop{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:590; }
+#sidebarBackdrop.show{ display:block; }
+
+/* ============================== SIDEBAR ============================== */
+#sidebar{
+  width:222px; flex-shrink:0; background:var(--sidebar-bg); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; padding:16px 14px; gap:4px; position:relative; overflow-y:auto;
+}
+.sb-pagecount{ font-size:10.5px; color:var(--text-muted); letter-spacing:.08em; margin-bottom:6px; }
+.sb-logo{ display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+.sb-logo .logo-icon{
+  width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  display:flex; align-items:center; justify-content:center; color:#1a1204; font-size:16px; flex-shrink:0;
+  box-shadow:0 4px 12px rgba(var(--accent-rgb),0.35);
+}
+.sb-logo .logo-text{ font-weight:700; font-size:16.5px; }
+
+.nav-item{
+  display:flex; align-items:center; gap:11px; padding:11px 13px; border-radius:12px; cursor:pointer;
+  color:var(--text-muted); font-size:14px; font-weight:500; border:1px solid transparent; background:none;
+  width:100%; text-align:left; font-family:inherit; transition:background .15s,color .15s;
+}
+.nav-item i{ width:18px; text-align:center; font-size:15px; }
+.nav-item:hover{ background:var(--nav-active-bg); color:var(--text-main); }
+.nav-item.active{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#1a1204; font-weight:700;
+  box-shadow:0 4px 14px rgba(var(--accent-rgb),0.3);
+}
+.nav-sep{ height:1px; background:var(--border); margin:14px 0 10px; }
+.sb-tagline{
+  margin-top:auto; padding-top:16px; font-size:11px; color:var(--text-muted); line-height:1.6; opacity:.6;
+}
+
+/* ============================== MAIN PANEL ============================== */
+#mainWrap{ flex:1; display:flex; flex-direction:column; min-width:0; padding:22px 26px; gap:16px; overflow:hidden;}
+.panel-header{ display:flex; align-items:flex-start; justify-content:space-between; }
+.panel-header .ph-left{ display:flex; gap:12px; align-items:center; }
+.panel-header .ph-icon{
+  width:38px; height:38px; border-radius:11px; background:var(--card-bg); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center; color:var(--accent); font-size:16px; flex-shrink:0;
+}
+.panel-header h1{ font-size:20px; font-weight:700; }
+.panel-header .ph-sub{ font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+.gear-btn{
+  width:38px; height:38px; border-radius:50%; background:var(--card-bg); border:1px solid var(--border);
+  color:var(--text-main); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px;
+  flex-shrink:0;
+}
+.gear-btn:hover{ color:var(--accent); }
+
+.tabs-row{ display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.page-tab{
+  width:34px; height:34px; border-radius:50%; border:1px solid var(--border); background:var(--card-bg);
+  color:var(--text-muted); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; font-family:inherit; flex-shrink:0;
+}
+.page-tab.active{
+  background:linear-gradient(135deg,var(--accent),var(--accent-2)); border-color:transparent; color:#1a1204;
+  box-shadow:0 3px 10px rgba(var(--accent-rgb),0.35);
+}
+.admin-tab{
+  color:var(--accent); border-color:var(--accent); background:rgba(var(--accent-rgb),0.12);
+}
+.admin-tab.unlocked-active{ background:var(--accent); color:#1a1204; }
+.tab-del-btn{
+  width:34px; height:34px; border-radius:50%; border:1px solid var(--border); background:var(--card-bg);
+  color:var(--danger); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px;
+  margin-left:auto; flex-shrink:0;
+}
+.tab-del-btn:hover{ background:var(--danger); color:#fff; }
+
+.view{ flex:1; min-height:0; display:none; flex-direction:column; }
+.view.active{ display:flex; }
+
+/* locked / restricted / empty placeholders (shared) */
+.placeholder-panel{
+  flex:1; border-radius:18px; border:1px solid var(--border); background:var(--card-bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; padding:30px;
+}
+.placeholder-panel i{ font-size:38px; color:var(--text-muted); opacity:.6; }
+.placeholder-panel.restricted{ border-color:var(--admin-color); }
+.placeholder-panel.restricted i{ color:var(--admin-color); opacity:1; background:var(--admin-color-bg); width:74px; height:74px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:30px;}
+.placeholder-panel h3{ font-size:16px; }
+.placeholder-panel p{ font-size:12.5px; color:var(--text-muted); max-width:260px; }
+
+/* ============================== CLIPBOARD VIEW ============================== */
+.content-box{
+  background:var(--card-bg); border-radius:16px; padding:18px; flex:1; min-height:0; border:1px solid var(--border-color);
+  display:flex; flex-direction:column; gap:12px; position:relative; transition:border-color .15s,box-shadow .15s;
+}
+.content-box.drag-over{ border-color:var(--accent); box-shadow:0 0 0 2px rgba(var(--accent-rgb),0.3); }
+.content-box:focus-within{ border-color:var(--primary-green); }
+.content-main-row{ display:flex; gap:12px; flex:1; min-height:0; }
+.content-icon{ color:var(--primary-green); font-size:18px; margin-top:2px; }
+.review-box{
+  font-family:'Noto Sans Devanagari',sans-serif; font-size:15px; color:var(--text-main); white-space:pre-wrap;
+  line-height:1.6; flex:1; outline:none; border:none; background:transparent; resize:none; width:100%; overflow-y:auto;
+}
+.content-bottom-bar{
+  display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--border-color);
+  flex-wrap:wrap; gap:10px;
+}
+.right-actions{ display:flex; align-items:center; gap:8px; }
+.round-btn{
+  background:var(--bg-color); border:1px solid var(--border-color); color:var(--text-main); width:30px; height:30px;
+  border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px;
+}
+.round-btn:disabled{ opacity:.35; cursor:not-allowed; }
+.copy-btn{
+  position:absolute; top:14px; right:14px; width:32px; height:32px; border-radius:50%;
+  background:var(--bg-color); border:1px solid var(--border-color); color:var(--primary-green);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; z-index:2;
+}
+.total-items{ font-size:11.5px; color:var(--text-muted); }
+.content-main-row{ padding-right:38px; }
+
+/* ============================== CHAT VIEW ============================== */
+.chat-box{
+  background:var(--card-bg); border-radius:16px; padding:14px; flex:1; min-height:0; border:1px solid var(--border-color);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#chatMessages{
+  flex:1; overflow-y:auto; padding:6px 4px; display:flex; flex-direction:column; gap:8px; min-height:0;
+}
+.msg-row{ display:flex; }
+.msg-row.me{ justify-content:flex-end; } .msg-row.them{ justify-content:flex-start; } .msg-row.sys{ justify-content:center; }
+.sys-note{ font-size:11px; color:var(--text-dim); background:var(--panel); padding:5px 12px; border-radius:20px; border:1px solid var(--line); }
+.bubble{ max-width:76%; padding:9px 12px; border-radius:14px; font-size:14px; line-height:1.4; position:relative; word-wrap:break-word;}
+.msg-row.me .bubble{ background:var(--bubble-me); color:var(--bubble-me-text); border-bottom-right-radius:4px; }
+.msg-row.them .bubble{ background:var(--bubble-them); color:var(--text); border-bottom-left-radius:4px; }
+.bubble .time{ font-size:10px; opacity:.6; margin-top:3px; text-align:right; }
+.bubble img{ max-width:220px; max-height:220px; width:auto; height:auto; object-fit:cover; border-radius:10px; display:block; margin-bottom:4px; cursor:pointer;}
+.file-card{ display:flex; align-items:center; gap:10px; padding:8px; border-radius:10px; background:rgba(0,0,0,0.15); margin-bottom:4px; min-width:180px;}
+.msg-row.them .file-card{ background:rgba(255,255,255,0.05); }
+.file-card .fc-icon{ font-size:22px; flex-shrink:0; }
+.file-card .fc-info{ flex:1; min-width:0; }
+.file-card .fc-name{ font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.file-card.is-image .fc-name{ font-size:10.5px; font-weight:500; opacity:.75; }
+.file-card .fc-size{ font-size:11px; opacity:.7; }
+.fc-progress-row{ display:flex; align-items:center; gap:6px; margin-top:5px; }
+.fc-progress{ flex:1; height:2px; background:rgba(0,0,0,0.2); border-radius:2px; overflow:hidden; }
+.fc-progress-fill{ height:100%; background:currentColor; width:0%; transition:width .2s; }
+.fc-pct{ font-size:10px; opacity:.75; flex-shrink:0; min-width:28px; text-align:right; }
+.fc-dl{ background:none; border:1px solid currentColor; border-radius:6px; padding:4px 8px; font-size:11px; cursor:pointer; font-family:inherit; color:inherit; flex-shrink:0;}
+#composer{ background:var(--panel); border-top:1px solid var(--line); border-radius:16px; padding:10px 12px; display:flex; align-items:flex-end; gap:8px; flex-shrink:0; margin-top:8px;}
+#attachBtn{ width:38px; height:38px; border-radius:50%; background:var(--bubble-them); border:none; color:var(--text-dim); font-size:18px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+#textInput{ flex:1; background:var(--bubble-them); border:none; color:var(--text); border-radius:20px; padding:10px 15px; font-size:14px; font-family:inherit; resize:none; max-height:100px; line-height:1.3;}
+#textInput:focus{ outline:none; }
+#sendBtn{ width:38px; height:38px; border-radius:50%; background:var(--signal); border:none; color:var(--bubble-me-text); font-size:16px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+#sendBtn:disabled{ opacity:.4; }
+#fileInput{ display:none; }
+.reply-quote{ display:flex; flex-direction:column; gap:1px; padding:6px 8px; margin-bottom:5px; border-left:3px solid currentColor; border-radius:6px; background:rgba(0,0,0,0.12); opacity:.9; cursor:pointer;}
+.msg-row.them .reply-quote{ background:rgba(255,255,255,0.06); }
+.reply-quote .rq-label{ font-size:11px; font-weight:700; } .reply-quote .rq-text{ font-size:12px; opacity:.85; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.edited-tag{ font-size:10px; opacity:.6; font-style:italic; margin-left:4px; }
+#actionBar{ display:none; align-items:center; gap:8px; background:var(--panel); border-radius:12px; padding:8px 12px; font-size:12.5px; margin-top:6px;}
+#actionBar .ab-accent{ width:3px; align-self:stretch; border-radius:2px; background:var(--signal); flex-shrink:0; }
+#actionBar .ab-body{ flex:1; min-width:0; } #actionBar .ab-title{ font-weight:700; color:var(--signal); font-size:11.5px; }
+#actionBar .ab-text{ color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#actionBar .ab-close{ background:none; border:none; color:var(--text-dim); font-size:18px; cursor:pointer; flex-shrink:0; }
+.toast{ position:fixed; bottom:88px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); color:var(--text); padding:8px 16px; border-radius:20px; font-size:12.5px; z-index:250; opacity:0; transition:opacity .2s; pointer-events:none;}
+.toast.show{ opacity:1; }
+#dropOverlay{ position:fixed; inset:0; z-index:300; display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px; background:rgba(10,15,20,0.9); border:3px dashed var(--signal); color:var(--text); text-align:center; padding:24px; pointer-events:none;}
+#dropOverlay.show{ display:flex; } #dropOverlay .dz-icon{ font-size:42px; } #dropOverlay .dz-title{ font-size:16px; font-weight:700; } #dropOverlay .dz-sub{ font-size:12.5px; color:var(--text-dim); }
+#imgViewer{ position:fixed; inset:0; z-index:400; display:none; align-items:center; justify-content:center; flex-direction:column; background:rgba(0,0,0,0.92);}
+#imgViewer.show{ display:flex; } #imgViewer img{ max-width:94vw; max-height:88vh; object-fit:contain; border-radius:8px; }
+#imgViewer .iv-close{ position:absolute; top:16px; right:16px; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,0.08); border:none; color:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;}
+#imgViewer .iv-header{ position:absolute; top:0; left:0; right:0; padding:16px 60px 20px 18px; background:linear-gradient(rgba(0,0,0,0.65),transparent); text-align:left; z-index:1;}
+#imgViewer .iv-name{ font-size:14px; font-weight:600; color:#fff; word-break:break-all; } #imgViewer .iv-size{ font-size:12px; color:rgba(255,255,255,0.7); margin-top:2px; }
+#imgViewer .iv-navrow{ display:flex; align-items:center; justify-content:center; gap:36px; margin-top:16px; } #imgViewer .iv-navrow.hidden{ display:none; }
+#imgViewer .iv-nav{ width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,0.1); border:none; color:#fff; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+#imgViewer .iv-counter{ font-size:12.5px; color:rgba(255,255,255,0.75); min-width:44px; text-align:center; }
+.img-group{ display:grid; gap:3px; width:220px; border-radius:12px; overflow:hidden; margin-bottom:2px; }
+.img-group.n1{ display:block; width:auto; } .img-group.n2{ grid-template-columns:repeat(2,1fr);} .img-group.n3{ grid-template-columns:repeat(2,1fr);}
+.img-group.n3 .img-tile:nth-child(3){ grid-column:1/3; } .img-group.n4plus{ grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(2,1fr); }
+.img-tile{ position:relative; aspect-ratio:1/1; overflow:hidden; cursor:pointer; } .img-group.n1 .img-tile{ aspect-ratio:auto; }
+.img-tile img{ width:100%; height:100%; object-fit:cover; display:block; } .img-group.n1 .img-tile img{ width:auto; height:auto; max-width:220px; max-height:220px; object-fit:cover; }
+.img-tile .more-overlay{ position:absolute; inset:0; background:rgba(0,0,0,0.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700;}
+.img-status{ font-size:10.5px; color:var(--text-dim); margin:2px 2px 0; } .img-dl-row{ display:flex; justify-content:flex-end; margin-top:4px; }
+.img-dl-btn{ width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.35); border:none; color:#fff; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+#ctxBackdrop{ position:fixed; inset:0; z-index:200; display:none; background:rgba(0,0,0,0.15); }
+#ctxMenu{ position:fixed; z-index:201; display:none; min-width:150px; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);}
+#ctxMenu button{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; color:var(--text); font-family:inherit; font-size:14px; padding:11px 14px; cursor:pointer;}
+#ctxMenu button:not(:last-child){ border-bottom:1px solid var(--line); } #ctxMenu button:active{ background:var(--bubble-them); } #ctxMenu button.danger{ color:var(--danger); }
+
+/* ============================== SETTINGS MODAL ============================== */
+.modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:700; display:none; align-items:center; justify-content:center; padding:20px;}
+.modal-backdrop.show{ display:flex; }
+.modal-card{ background:var(--card-bg); border:1px solid var(--border); border-radius:18px; padding:22px; width:100%; max-width:360px; }
+.modal-card h3{ font-size:16px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; }
+.modal-card h3 .close-x{ cursor:pointer; color:var(--text-muted); font-size:16px; }
+.set-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.set-row .set-label{ font-size:13px; font-weight:500; }
+.switch{ position:relative; width:46px; height:26px; }
+.switch input{ opacity:0; width:0; height:0; }
+.slider{ position:absolute; cursor:pointer; inset:0; background:var(--border); border-radius:26px; transition:.2s; }
+.slider:before{ content:""; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s;}
+.switch input:checked + .slider{ background:var(--accent); }
+.switch input:checked + .slider:before{ transform:translateX(20px); }
+.theme-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:6px; }
+.theme-swatch{
+  border-radius:12px; padding:10px 6px; cursor:pointer; border:2px solid var(--border); background:var(--bg-color);
+  display:flex; flex-direction:column; align-items:center; gap:6px; font-size:10px; color:var(--text-muted); font-weight:600;
+}
+.theme-swatch .sw-dot{ width:26px; height:26px; border-radius:50%; }
+.theme-swatch.active{ border-color:var(--accent); color:var(--text-main); }
+.settings-danger-btn{
+  width:100%; margin-top:6px; background:rgba(255,90,90,0.1); border:1px solid var(--danger); color:var(--danger);
+  padding:9px; border-radius:10px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit;
+}
+.pass-input{
+  width:100%; background:var(--bg-color); border:1px solid var(--border); color:var(--text-main); border-radius:10px;
+  padding:12px; font-family:var(--mono); font-size:18px; letter-spacing:.25em; text-align:center; margin-bottom:12px;
+}
+.pass-input:focus{ outline:none; border-color:var(--admin-color); }
+.pass-error{ font-size:12px; color:var(--danger); text-align:center; margin-bottom:8px; min-height:14px; }
+.btn{ background:var(--accent); color:#1a1204; border:none; border-radius:10px; padding:11px 18px; font-weight:700; font-size:13.5px; cursor:pointer; font-family:inherit; width:100%;}
+.btn.ghost{ background:none; border:1px solid var(--border); color:var(--text-main); margin-top:8px; }
+
+::-webkit-scrollbar{ width:5px; } ::-webkit-scrollbar-thumb{ background:var(--border); border-radius:3px; }
+
+@media (max-width:820px){
+  .mobile-menu-btn{ display:flex; }
+  #sidebar{
+    position:fixed; top:0; left:0; bottom:0; width:80%; max-width:280px; z-index:600;
+    transform:translateX(-105%); transition:transform .25s ease; box-shadow:0 0 40px rgba(0,0,0,0.45);
+  }
+  #sidebar.open{ transform:translateX(0); }
+  #mainWrap{ width:100%; padding:14px 14px 12px; gap:12px; }
+  .panel-header h1{ font-size:17px; }
+  .panel-header .ph-sub{ font-size:11px; }
+  .ph-icon{ width:34px; height:34px; font-size:14px; }
+  .gear-btn{ width:34px; height:34px; font-size:13px; }
+  .tabs-row{ gap:7px; }
+  .page-tab{ width:30px; height:30px; font-size:12px; }
+  .tab-del-btn{ width:30px; height:30px; }
+  .content-box, .chat-box{ padding:14px; border-radius:14px; }
+  .copy-btn{ top:10px; right:10px; width:28px; height:28px; font-size:12px; }
+  .review-box{ font-size:14px; }
+  .bubble{ max-width:86%; font-size:13.5px; }
+  #composer{ padding:8px 10px; }
+  .modal-card{ max-width:100%; }
+}
+@media (max-width:400px){
+  .tabs-row{ gap:5px; }
+  .page-tab{ width:27px; height:27px; font-size:11px; }
+  .admin-tab i{ font-size:10px; }
+}
+</style>
+</head>
+<body>
+
+<div id="sidebarBackdrop"></div>
+
+<!-- ============================== SIDEBAR ============================== -->
+<div id="sidebar">
+  <div class="sb-pagecount" id="pageCounter">1/6</div>
+  <div class="sb-logo"><div class="logo-icon"><i class="fa-solid fa-comment-dots"></i></div><div class="logo-text">MyChat</div></div>
+
+  <button class="nav-item active" id="navClipboard" data-section="clipboard"><i class="fa-regular fa-clipboard"></i><span>Clipboard</span></button>
+  <button class="nav-item" id="navChatRoom" data-section="chatroom"><i class="fa-regular fa-comment-dots"></i><span>Chat Room</span></button>
+
+  <div class="nav-sep"></div>
+  <button class="nav-item" id="navSettings"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+
+  <div class="sb-tagline">Simple<br>Connect<br>Share</div>
+</div>
+
+<!-- ============================== MAIN ============================== -->
+<div id="mainWrap">
+  <div class="panel-header">
+    <div class="ph-left">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" title="Menu"><i class="fa-solid fa-bars"></i></button>
+      <div class="ph-icon" id="panelIcon"><i class="fa-regular fa-clipboard"></i></div>
+      <div><h1 id="panelTitle">Clipboard</h1></div>
+    </div>
+  </div>
+
+  <!-- Clipboard tabs -->
+  <div class="tabs-row" id="clipTabsRow">
+    <button class="page-tab active" data-page="1">1</button>
+    <button class="page-tab" data-page="2">2</button>
+    <button class="page-tab" data-page="3">3</button>
+    <button class="page-tab" data-page="4">4</button>
+    <button class="page-tab" data-page="5">5</button>
+    <button class="page-tab admin-tab" data-page="Admin" title="Admin"><i class="fa-solid fa-lock"></i></button>
+    <button class="tab-del-btn" id="clipDeleteBtn" title="Delete this page's content"><i class="fa-solid fa-trash-can"></i></button>
+  </div>
+
+  <!-- Chat tabs -->
+  <div class="tabs-row" id="chatTabsRow" style="display:none;">
+    <button class="page-tab active" data-room="1">1</button>
+    <button class="page-tab" data-room="2">2</button>
+    <button class="page-tab" data-room="3">3</button>
+    <button class="page-tab" data-room="4">4</button>
+    <button class="page-tab" data-room="5">5</button>
+    <button class="page-tab admin-tab" data-room="ADMIN" title="Admin"><i class="fa-solid fa-lock"></i></button>
+    <button class="tab-del-btn" id="chatDeleteBtn" title="Delete this room's chat"><i class="fa-solid fa-trash-can"></i></button>
+  </div>
+
+  <!-- ===== CLIPBOARD VIEW ===== -->
+  <div class="view active" id="clipboardView">
+    <div class="content-box" id="clipContentBox">
+      <button id="copyBtn" class="copy-btn" title="Copy All Text"><i class="fa-regular fa-copy"></i></button>
+      <div class="content-main-row">
+        <div class="content-icon"><i class="fa-regular fa-pen-to-square"></i></div>
+        <textarea id="reviewArea" class="review-box" placeholder="Start typing or paste your content here..."></textarea>
+      </div>
+      <div class="content-bottom-bar">
+        <div class="total-items" id="status">Connecting...</div>
+        <div class="right-actions">
+          <button id="undoBtn" class="round-btn" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+          <button id="redoBtn" class="round-btn" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="placeholder-panel restricted" id="clipLockedPanel" style="display:none;">
+      <i class="fa-solid fa-lock"></i><h3>Access Restricted</h3><p>You don't have permission to open this room.</p>
+    </div>
+  </div>
+
+  <!-- ===== CHAT VIEW ===== -->
+  <div class="view" id="chatView">
+    <div class="placeholder-panel" id="chatEmptyPanel"><i class="fa-regular fa-comment-dots"></i><h3>No room selected</h3><p>Click on a room number above to open the chat.</p></div>
+    <div class="placeholder-panel restricted" id="chatLockedPanel" style="display:none;"><i class="fa-solid fa-lock"></i><h3>Access Restricted</h3><p>You don't have permission to open this room.</p></div>
+    <div class="chat-box" id="chatBox" style="display:none;">
+      <div id="chatMessages"></div>
+    </div>
+    <div id="actionBar" style="display:none;">
+      <div class="ab-accent"></div>
+      <div class="ab-body"><div class="ab-title" id="actionBarTitle">Reply</div><div class="ab-text" id="actionBarText"></div></div>
+      <button class="ab-close" id="actionBarClose">✕</button>
+    </div>
+    <div id="composer" style="display:none;">
+      <button id="attachBtn"><i class="fa-solid fa-paperclip"></i></button>
+      <input type="file" id="fileInput" multiple>
+      <textarea id="textInput" placeholder="Type a message..." rows="1"></textarea>
+      <button id="sendBtn"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS MODAL ===== -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal-card">
+    <h3>Settings <span class="close-x" id="settingsClose">✕</span></h3>
+    <div class="set-row">
+      <div class="set-label">Dark Mode</div>
+      <label class="switch"><input type="checkbox" id="themeSwitch" checked><span class="slider"></span></label>
+    </div>
+    <div class="set-label" style="margin-bottom:10px;">Website Theme</div>
+    <div class="theme-grid" id="themeGrid">
+      <div class="theme-swatch active" data-preset="classic-green"><div class="sw-dot" style="background:linear-gradient(135deg,#4caf50,#81c784);"></div>Green</div>
+      <div class="theme-swatch" data-preset="midnight-gold"><div class="sw-dot" style="background:linear-gradient(135deg,#d4af37,#f5d78e);"></div>Gold</div>
+      <div class="theme-swatch" data-preset="sapphire-noir"><div class="sw-dot" style="background:linear-gradient(135deg,#3b82f6,#93c5fd);"></div>Sapphire</div>
+      <div class="theme-swatch" data-preset="rose-quartz"><div class="sw-dot" style="background:linear-gradient(135deg,#f43f5e,#fda4af);"></div>Rose</div>
+      <div class="theme-swatch" data-preset="amethyst-royale"><div class="sw-dot" style="background:linear-gradient(135deg,#8b5cf6,#d8b4fe);"></div>Amethyst</div>
+    </div>
+    <button class="settings-danger-btn" id="masterDeleteBtn"><i class="fa-solid fa-broom"></i> Clear All Clipboard Pages</button>
+  </div>
+</div>
+
+<!-- ===== ADMIN PASSWORD MODAL ===== -->
+<div class="modal-backdrop" id="adminModal">
+  <div class="modal-card">
+    <h3><span><i class="fa-solid fa-lock" style="color:var(--admin-color);"></i> Admin Access</span> <span class="close-x" id="adminModalClose">✕</span></h3>
+    <input type="password" class="pass-input" id="adminPassInput" maxlength="12" inputmode="numeric" placeholder="••••">
+    <div class="pass-error" id="adminPassError"></div>
+    <button class="btn" id="adminPassSubmit">Unlock</button>
+  </div>
+</div>
+
+<div id="ctxBackdrop"></div>
+<div id="ctxMenu"></div>
+<div class="toast" id="toast"></div>
+<div id="dropOverlay"><div class="dz-icon">📥</div><div class="dz-title">Drop here</div><div class="dz-sub">Release to send file / image</div></div>
+<div id="imgViewer">
+  <div class="iv-header"><div class="iv-name" id="imgViewerName"></div><div class="iv-size" id="imgViewerSize"></div></div>
+  <button class="iv-close" id="imgViewerClose">✕</button>
+  <img id="imgViewerImg" src="" alt="preview">
+  <div class="iv-navrow" id="imgViewerNavRow"><button class="iv-nav iv-prev" id="imgViewerPrev">←</button><div class="iv-counter" id="imgViewerCounter"></div><button class="iv-nav iv-next" id="imgViewerNext">→</button></div>
+</div>
+
+<script>
+/* ============================================================
+   SHARED SHELL LOGIC — theme, navigation, settings, admin gate
+   ============================================================ */
+const ADMIN_PASSWORD = '6261';
+window.currentSection = 'clipboard';      // 'clipboard' | 'chatroom'
+window.adminUnlocked = (sessionStorage.getItem('mychat_admin_unlocked') === '1');
+window.pendingAdminTarget = null;         // { section }
+
+/* ---- theme (light/dark) ---- */
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('mychat_theme', theme);
+  document.getElementById('themeSwitch').checked = (theme === 'dark');
+}
+applyTheme(localStorage.getItem('mychat_theme') || 'dark');
+document.getElementById('themeSwitch').addEventListener('change', (e) => {
+  applyTheme(e.target.checked ? 'dark' : 'light');
+});
+
+/* ---- website theme presets ---- */
+function applySitePreset(preset){
+  document.documentElement.setAttribute('data-site-theme', preset);
+  localStorage.setItem('mychat_site_theme', preset);
+  document.querySelectorAll('.theme-swatch').forEach(sw => sw.classList.toggle('active', sw.dataset.preset === preset));
+}
+applySitePreset(localStorage.getItem('mychat_site_theme') || 'classic-green');
+document.querySelectorAll('.theme-swatch').forEach(sw => {
+  sw.addEventListener('click', () => applySitePreset(sw.dataset.preset));
+});
+
+/* ---- settings modal ---- */
+const settingsModal = document.getElementById('settingsModal');
+function openSettings(){ settingsModal.classList.add('show'); }
+function closeSettings(){ settingsModal.classList.remove('show'); }
+document.getElementById('navSettings').addEventListener('click', () => { openSettings(); closeMobileSidebar(); });
+document.getElementById('settingsClose').addEventListener('click', closeSettings);
+settingsModal.addEventListener('click', (e) => { if(e.target === settingsModal) closeSettings(); });
+
+/* ---- admin password modal ---- */
+const adminModal = document.getElementById('adminModal');
+const adminPassInput = document.getElementById('adminPassInput');
+const adminPassError = document.getElementById('adminPassError');
+function openAdminGate(section){
+  window.pendingAdminTarget = { section };
+  adminPassInput.value = '';
+  adminPassError.textContent = '';
+  adminModal.classList.add('show');
+  setTimeout(() => adminPassInput.focus(), 50);
+}
+function closeAdminGate(){ adminModal.classList.remove('show'); window.pendingAdminTarget = null; }
+document.getElementById('adminModalClose').addEventListener('click', closeAdminGate);
+adminModal.addEventListener('click', (e) => { if(e.target === adminModal) closeAdminGate(); });
+function submitAdminPass(){
+  if(adminPassInput.value.trim() === ADMIN_PASSWORD){
+    window.adminUnlocked = true;
+    sessionStorage.setItem('mychat_admin_unlocked', '1');
+    const target = window.pendingAdminTarget;
+    adminModal.classList.remove('show');
+    window.pendingAdminTarget = null;
+    if(target && target.section === 'clipboard') window.__clipSelectPage('Admin');
+    if(target && target.section === 'chatroom') window.__chatSelectRoom('ADMIN');
+  } else {
+    adminPassError.textContent = 'Incorrect password. Try again.';
+    adminPassInput.value = '';
+    adminPassInput.focus();
+  }
+}
+document.getElementById('adminPassSubmit').addEventListener('click', submitAdminPass);
+adminPassInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') submitAdminPass(); });
+
+/* ---- sidebar navigation between Clipboard / Chat Room ---- */
+const navClipboard = document.getElementById('navClipboard');
+const navChatRoom = document.getElementById('navChatRoom');
+const clipboardView = document.getElementById('clipboardView');
+const chatView = document.getElementById('chatView');
+const clipTabsRow = document.getElementById('clipTabsRow');
+const chatTabsRow = document.getElementById('chatTabsRow');
+const panelIcon = document.getElementById('panelIcon');
+const panelTitle = document.getElementById('panelTitle');
+
+function switchSection(section){
+  window.currentSection = section;
+  navClipboard.classList.toggle('active', section === 'clipboard');
+  navChatRoom.classList.toggle('active', section === 'chatroom');
+  clipboardView.classList.toggle('active', section === 'clipboard');
+  chatView.classList.toggle('active', section === 'chatroom');
+  clipTabsRow.style.display = (section === 'clipboard') ? 'flex' : 'none';
+  chatTabsRow.style.display = (section === 'chatroom') ? 'flex' : 'none';
+  if(section === 'clipboard'){
+    panelIcon.innerHTML = '<i class="fa-regular fa-clipboard"></i>';
+    panelTitle.textContent = 'Clipboard';
+    updatePageCounter(window.__clipCurrentPage ? window.__clipCurrentPage() : '1');
+  } else {
+    panelIcon.innerHTML = '<i class="fa-regular fa-comment-dots"></i>';
+    panelTitle.textContent = 'Chat Room';
+    updatePageCounter(window.__chatCurrentPage ? window.__chatCurrentPage() : '1');
+  }
+}
+navClipboard.addEventListener('click', () => { switchSection('clipboard'); closeMobileSidebar(); });
+navChatRoom.addEventListener('click', () => { switchSection('chatroom'); closeMobileSidebar(); });
+
+/* ---- mobile sidebar (hamburger overlay) ---- */
+const sidebarEl = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+function openMobileSidebar(){ sidebarEl.classList.add('open'); sidebarBackdrop.classList.add('show'); }
+function closeMobileSidebar(){ sidebarEl.classList.remove('open'); sidebarBackdrop.classList.remove('show'); }
+document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+  sidebarEl.classList.contains('open') ? closeMobileSidebar() : openMobileSidebar();
+});
+sidebarBackdrop.addEventListener('click', closeMobileSidebar);
+
+const PAGE_ORDER = ['1','2','3','4','5','Admin'];
+function updatePageCounter(key){
+  const idx = PAGE_ORDER.indexOf(key === 'ADMIN' ? 'Admin' : key);
+  document.getElementById('pageCounter').textContent = (idx >= 0 ? idx + 1 : 1) + '/6';
+}
+window.updatePageCounter = updatePageCounter;
+window.isChatSectionActive = function(){ return window.currentSection === 'chatroom'; };
+
+/* toast (shared) */
+let toastTimer = null;
+function showToast(text){
+  const t = document.getElementById('toast');
+  t.textContent = text; t.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
+}
+window.showToast = showToast;
+</script>
+
+<!-- ============================================================
+     CLIPBOARD ENGINE (Firebase Realtime) — module scoped
+     ============================================================ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyASRJsCylYtN8pawm3jKg4nrtVVsusfrk",
+  authDomain: "my-realtime-clipboard.firebaseapp.com",
+  projectId: "my-realtime-clipboard",
+  storageBucket: "my-realtime-clipboard.appspot.com",
+  messagingSenderId: "838820540880",
+  appId: "1:838820540880:web:d7eaa3d5c96f3d9017c9d5"
+};
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+
+document.addEventListener('DOMContentLoaded', () => {
+  const reviewArea = document.getElementById('reviewArea');
+  const status = document.getElementById('status');
+  const clipContentBox = document.getElementById('clipContentBox');
+  const clipLockedPanel = document.getElementById('clipLockedPanel');
+  const copyBtn = document.getElementById('copyBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const masterDeleteBtn = document.getElementById('masterDeleteBtn');
+  const clipDeleteBtn = document.getElementById('clipDeleteBtn');
+  const pageTabs = document.querySelectorAll('#clipTabsRow .page-tab');
+
+  const PAGE_KEYS = ['1','2','3','4','5','Admin'];
+  const MASTER_CLEAR_KEYS = ['1','2','3','4','5'];
+  const MAX_HISTORY = 30;
+  let currentPage = localStorage.getItem('activeClipPage') || '1';
+  let isTyping = false;
+  let historyDebounce = null;
+  const remoteCache = {};
+
+  window.__clipCurrentPage = () => currentPage;
+
+  function getHistoryState(page){
+    try{
+      const raw = localStorage.getItem('history_page' + page);
+      if(raw){ const parsed = JSON.parse(raw); if(Array.isArray(parsed.list) && typeof parsed.index === 'number') return parsed; }
+    } catch(e){}
+    return { list: [""], index: 0 };
+  }
+  function saveHistoryState(page, state){ localStorage.setItem('history_page' + page, JSON.stringify(state)); }
+  function pushHistory(page, text){
+    const state = getHistoryState(page);
+    if(state.list[state.index] === text) return;
+    state.list = state.list.slice(0, state.index + 1);
+    state.list.push(text);
+    if(state.list.length > MAX_HISTORY) state.list.shift();
+    state.index = state.list.length - 1;
+    saveHistoryState(page, state);
+    if(page === currentPage) updateUndoRedoButtons();
+  }
+  function updateUndoRedoButtons(){
+    const state = getHistoryState(currentPage);
+    undoBtn.disabled = state.index <= 0;
+    redoBtn.disabled = state.index >= state.list.length - 1;
+  }
+  function flushPendingHistory(){
+    if(historyDebounce){ clearTimeout(historyDebounce); historyDebounce = null; pushHistory(currentPage, reviewArea.value); }
+  }
+
+  undoBtn.addEventListener('click', () => {
+    flushPendingHistory();
+    const state = getHistoryState(currentPage);
+    if(state.index <= 0) return;
+    state.index -= 1; saveHistoryState(currentPage, state);
+    const text = state.list[state.index];
+    reviewArea.value = text;
+    writeToFirebase(currentPage, text, () => { status.textContent = "Undo done"; });
+    updateUndoRedoButtons();
+  });
+  redoBtn.addEventListener('click', () => {
+    flushPendingHistory();
+    const state = getHistoryState(currentPage);
+    if(state.index >= state.list.length - 1) return;
+    state.index += 1; saveHistoryState(currentPage, state);
+    const text = state.list[state.index];
+    reviewArea.value = text;
+    writeToFirebase(currentPage, text, () => { status.textContent = "Redo done"; });
+    updateUndoRedoButtons();
+  });
+
+  function showLockedUI(){ clipContentBox.style.display = 'none'; clipLockedPanel.style.display = 'flex'; }
+  function showUnlockedUI(){ clipContentBox.style.display = 'flex'; clipLockedPanel.style.display = 'none'; }
+
+  function setActiveTabUI(){
+    pageTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.page === currentPage));
+    document.querySelector('#clipTabsRow .admin-tab').classList.toggle('unlocked-active', currentPage === 'Admin' && window.adminUnlocked);
+    if(window.isChatSectionActive && !window.isChatSectionActive()) window.updatePageCounter(currentPage);
+  }
+
+  function loadPage(page){
+    currentPage = page;
+    localStorage.setItem('activeClipPage', currentPage);
+    setActiveTabUI();
+    showUnlockedUI();
+    const hasRemote = Object.prototype.hasOwnProperty.call(remoteCache, currentPage);
+    const state = getHistoryState(currentPage);
+    const text = hasRemote ? remoteCache[currentPage] : (state.list[state.index] || "");
+    reviewArea.value = text;
+    if(hasRemote && state.list[state.index] !== text) pushHistory(currentPage, text); else updateUndoRedoButtons();
+    status.textContent = "Page " + currentPage + ": Live Sync Active";
+  }
+
+  function selectPage(page){
+    if(page === 'Admin' && !window.adminUnlocked){
+      currentPage = 'Admin';
+      localStorage.setItem('activeClipPage', currentPage);
+      setActiveTabUI();
+      showLockedUI();
+      openAdminGate('clipboard');
+      return;
+    }
+    if(page === currentPage && clipContentBox.style.display !== 'none') return;
+    flushPendingHistory();
+    loadPage(page);
+  }
+  window.__clipSelectPage = selectPage;
+
+  pageTabs.forEach(tab => tab.addEventListener('click', () => selectPage(tab.dataset.page)));
+
+  // initial load
+  if(currentPage === 'Admin' && !window.adminUnlocked){ setActiveTabUI(); showLockedUI(); }
+  else { loadPage(currentPage); }
+
+  function writeToFirebase(page, text, onDone){
+    isTyping = true;
+    set(ref(database, 'typingText/page' + page), { text: text }).then(() => {
+      isTyping = false; if(onDone) onDone();
+    }).catch((error) => { console.error(error); isTyping = false; });
+  }
+
+  PAGE_KEYS.forEach((p) => {
+    const pageRef = ref(database, 'typingText/page' + p);
+    onValue(pageRef, (snapshot) => {
+      const data = snapshot.val();
+      const remoteText = (data && data.text !== undefined) ? data.text : "";
+      remoteCache[p] = remoteText;
+      if(p === currentPage && !isTyping && clipContentBox.style.display !== 'none'){
+        if(reviewArea.value !== remoteText){
+          reviewArea.value = remoteText;
+          status.textContent = "Page " + p + ": Live Sync Active";
+          const state = getHistoryState(p);
+          if(state.list[state.index] !== remoteText) pushHistory(p, remoteText);
+        }
+      }
+    }, (error) => { status.textContent = "Error loading data."; console.error(error); });
+  });
+
+  reviewArea.addEventListener('input', (e) => {
+    const updatedText = e.target.value;
+    writeToFirebase(currentPage, updatedText);
+    clearTimeout(historyDebounce);
+    historyDebounce = setTimeout(() => { historyDebounce = null; pushHistory(currentPage, updatedText); }, 800);
+  });
+
+  window.addEventListener('beforeunload', flushPendingHistory);
+  window.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') flushPendingHistory(); });
+
+  // per-page delete (unified tab-row trash icon)
+  clipDeleteBtn.addEventListener('click', () => {
+    if(currentPage === 'Admin' && !window.adminUnlocked){ showToast('Unlock Admin first'); return; }
+    flushPendingHistory();
+    reviewArea.value = "";
+    writeToFirebase(currentPage, "", () => { status.textContent = "Page " + currentPage + " cleared!"; });
+    pushHistory(currentPage, "");
+  });
+
+  // master clear (settings panel)
+  masterDeleteBtn.addEventListener('click', () => {
+    if(!confirm('Clear text on pages 1-5? This cannot be undone.')) return;
+    flushPendingHistory();
+    MASTER_CLEAR_KEYS.forEach((p) => {
+      remoteCache[p] = "";
+      writeToFirebase(p, "");
+      pushHistory(p, "");
+    });
+    if(MASTER_CLEAR_KEYS.includes(currentPage)) reviewArea.value = "";
+    updateUndoRedoButtons();
+    status.textContent = "All pages cleared!";
+    closeSettings();
+  });
+
+  copyBtn.addEventListener('click', () => {
+    if(!reviewArea.value){ status.textContent = "Nothing to copy!"; return; }
+    navigator.clipboard.writeText(reviewArea.value).then(() => {
+      const orig = copyBtn.innerHTML;
+      copyBtn.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+      status.textContent = "Text copied to clipboard!";
+      setTimeout(() => { copyBtn.innerHTML = orig; status.textContent = "Page " + currentPage + ": Live Sync Active"; }, 2000);
+    }).catch((err) => { console.error(err); status.textContent = "Failed to copy text."; });
+  });
+
+  /* ---------- Drag & Drop of text / files / images into the clipboard box ---------- */
+  function insertAtCursor(text){
+    const start = reviewArea.selectionStart, end = reviewArea.selectionEnd;
+    const val = reviewArea.value;
+    reviewArea.value = val.slice(0, start) + text + val.slice(end);
+    reviewArea.dispatchEvent(new Event('input'));
+  }
+  function fmtBytes(n){ if(n < 1024) return n + ' B'; if(n < 1024*1024) return (n/1024).toFixed(1) + ' KB'; return (n/1024/1024).toFixed(1) + ' MB'; }
+
+  ['dragenter','dragover'].forEach(evt => {
+    clipContentBox.addEventListener(evt, (e) => { e.preventDefault(); clipContentBox.classList.add('drag-over'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    clipContentBox.addEventListener(evt, (e) => { e.preventDefault(); clipContentBox.classList.remove('drag-over'); });
+  });
+  clipContentBox.addEventListener('drop', async (e) => {
+    if(clipContentBox.style.display === 'none') return;
+    const files = Array.from(e.dataTransfer.files || []);
+    if(files.length){
+      for(const file of files){
+        if(file.type && file.type.startsWith('text/')){
+          const text = await file.text();
+          insertAtCursor("\n" + text + "\n");
+        } else {
+          const dataUrl = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(file); });
+          insertAtCursor("\n[Attached: " + file.name + " - " + fmtBytes(file.size) + "]\n" + dataUrl + "\n");
+        }
+      }
+      status.textContent = "Attachment added to Page " + currentPage;
+      return;
+    }
+    const text = e.dataTransfer.getData('text/plain');
+    if(text) insertAtCursor(text);
+  });
+});
+</script>
+
+<!-- ============================================================
+     CHAT ENGINE (Firebase Realtime, compat SDK)
+     ============================================================ -->
+<script>
+const firebaseConfigChat = {
+  apiKey: "AIzaSyD7rqslmmw_ZCo97m8xDolZatmnaKjzhQQ",
+  authDomain: "live-chat-650db.firebaseapp.com",
+  databaseURL: "https://live-chat-650db-default-rtdb.firebaseio.com",
+  projectId: "live-chat-650db",
+  storageBucket: "live-chat-650db.firebasestorage.app",
+  messagingSenderId: "686160183849",
+  appId: "1:686160183849:web:3d58066569149a064cd238"
+};
+firebase.initializeApp(firebaseConfigChat);
+const db = firebase.database();
+
+const MAX_FILE_MB = 30;
+const CHUNK_RAW_SIZE = 4 * 1024 * 1024;
+let roomCode = '';
+let myId = 'u' + Date.now() + Math.random().toString(36).slice(2,8);
+let messagesRef = null;
+let participantsRef = null;
+let myParticipantRef = null;
+let seenMessageIds = new Set();
+const messageMeta = {};
+let replyingTo = null;
+let editingId = null;
+
+function dlog(msg){ /* debug hook, no-op UI in this build */ }
+window.onerror = function(msg, src, line){ console.error('JS ERROR: ' + msg + ' (line ' + line + ')'); };
+
+function fmtSize(bytes){
+  if(bytes < 1024) return bytes + ' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+function nowTime(){ const d = new Date(); return d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }); }
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function abToBase64(buffer){
+  let binary = ''; const bytes = new Uint8Array(buffer); const len = bytes.byteLength; const CH = 0x8000;
+  for(let i=0;i<len;i+=CH){ binary += String.fromCharCode.apply(null, bytes.subarray(i, i+CH)); }
+  return btoa(binary);
+}
+function base64ToBytes(b64){
+  const byteChars = atob(b64); const bytes = new Uint8Array(byteChars.length);
+  for(let j=0;j<byteChars.length;j++) bytes[j] = byteChars.charCodeAt(j);
+  return bytes;
+}
+
+/* ---------- context menu (long press: copy / reply / edit / delete) ---------- */
+const ctxMenuEl = document.getElementById('ctxMenu');
+const ctxBackdropEl = document.getElementById('ctxBackdrop');
+function closeCtxMenu(){ ctxMenuEl.style.display = 'none'; ctxBackdropEl.style.display = 'none'; ctxMenuEl.innerHTML = ''; }
+ctxBackdropEl.addEventListener('click', closeCtxMenu);
+function openCtxMenu(x, y, id){
+  const meta = messageMeta[id];
+  if(!meta) return;
+  const items = [];
+  if(meta.type === 'text') items.push({ label: '📋 Copy', run: () => copyMessageText(id) });
+  items.push({ label: '↩️ Reply', run: () => startReply(id) });
+  if(meta.mine && meta.type === 'text') items.push({ label: '✏️ Edit', run: () => startEdit(id) });
+  items.push({ label: '🗑️ Delete', run: () => deleteMessage(id), danger: true });
+  ctxMenuEl.innerHTML = items.map((it, i) => '<button data-i="' + i + '"' + (it.danger ? ' class="danger"' : '') + '>' + it.label + '</button>').join('');
+  ctxMenuEl.querySelectorAll('button').forEach((btn, i) => { btn.onclick = () => { closeCtxMenu(); items[i].run(); }; });
+  ctxBackdropEl.style.display = 'block'; ctxMenuEl.style.display = 'block';
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const rect = ctxMenuEl.getBoundingClientRect();
+  let left = Math.min(x, vw - rect.width - 10); let top = Math.min(y, vh - rect.height - 10);
+  left = Math.max(10, left); top = Math.max(10, top);
+  ctxMenuEl.style.left = left + 'px'; ctxMenuEl.style.top = top + 'px';
+}
+function attachLongPress(el, id){
+  if(!el) return;
+  let timer = null, startX = 0, startY = 0;
+  const clear = () => { if(timer) clearTimeout(timer); timer = null; };
+  const begin = (x, y) => { startX = x; startY = y; timer = setTimeout(() => { if(navigator.vibrate) navigator.vibrate(15); openCtxMenu(x, y, id); }, 480); };
+  el.addEventListener('touchstart', (e) => { const t = e.touches[0]; begin(t.clientX, t.clientY); }, { passive: true });
+  el.addEventListener('touchmove', (e) => { const t = e.touches[0]; if(Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) clear(); }, { passive: true });
+  el.addEventListener('touchend', clear);
+  el.addEventListener('mousedown', (e) => begin(e.clientX, e.clientY));
+  el.addEventListener('mouseup', clear); el.addEventListener('mouseleave', clear);
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+function legacyCopy(text){
+  try{
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly','');
+    ta.style.position='fixed'; ta.style.top='0'; ta.style.left='0'; ta.style.width='1px'; ta.style.height='1px';
+    ta.style.padding='0'; ta.style.border='none'; ta.style.outline='none'; ta.style.boxShadow='none'; ta.style.background='transparent'; ta.style.fontSize='16px';
+    document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); document.body.removeChild(ta); return ok;
+  } catch(err){ return false; }
+}
+async function copyMessageText(id){
+  const meta = messageMeta[id]; if(!meta || !meta.text) return;
+  let ok = false;
+  if(window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText){
+    try{ await navigator.clipboard.writeText(meta.text); ok = true; } catch(err){}
+  }
+  if(!ok) ok = legacyCopy(meta.text);
+  showToast(ok ? 'Copied' : 'Could not copy, select manually');
+}
+
+/* ---------- reply / edit action bar ---------- */
+const actionBarEl = document.getElementById('actionBar');
+const actionBarTitleEl = document.getElementById('actionBarTitle');
+const actionBarTextEl = document.getElementById('actionBarText');
+document.getElementById('actionBarClose').onclick = cancelActionBar;
+function cancelActionBar(){ replyingTo = null; editingId = null; actionBarEl.style.display = 'none'; textInput.value = ''; textInput.style.height = 'auto'; }
+function startReply(id){
+  const meta = messageMeta[id]; if(!meta) return;
+  editingId = null;
+  const preview = meta.type === 'file' ? ('📎 ' + meta.name) : meta.type === 'imagegroup' ? ('🖼️ ' + (meta.count > 1 ? (meta.count + ' photos') : meta.name)) : meta.text;
+  replyingTo = { id, sender: meta.sender, preview };
+  actionBarTitleEl.textContent = 'Reply'; actionBarTextEl.textContent = preview; actionBarEl.style.display = 'flex'; textInput.focus();
+}
+function startEdit(id){
+  const meta = messageMeta[id]; if(!meta || meta.type !== 'text' || !meta.mine) return;
+  replyingTo = null; editingId = id;
+  actionBarTitleEl.textContent = 'Edit message'; actionBarTextEl.textContent = meta.text; actionBarEl.style.display = 'flex';
+  textInput.value = meta.text; textInput.style.height = 'auto'; textInput.style.height = Math.min(textInput.scrollHeight, 100) + 'px'; textInput.focus();
+}
+function deleteMessage(id){
+  const meta = messageMeta[id]; if(!meta || !messagesRef) return;
+  if(!confirm('Delete this message?')) return;
+  messagesRef.child(id).remove().catch(err => console.error(err));
+  if(meta.type === 'file' && meta.groupId) db.ref('rooms/' + roomCode + '/fileChunks/' + meta.groupId).remove().catch(err => console.error(err));
+  else if(meta.type === 'imagegroup' && meta.groupIds) meta.groupIds.forEach(gid => db.ref('rooms/' + roomCode + '/fileChunks/' + gid).remove().catch(err => console.error(err)));
+  if(replyingTo && replyingTo.id === id) cancelActionBar();
+  if(editingId === id) cancelActionBar();
+}
+function renderReplyQuoteHtml(replyTo){
+  if(!replyTo) return '';
+  const label = (replyTo.sender === myId) ? 'You' : 'Peer';
+  return '<div class="reply-quote"><div class="rq-label">' + label + '</div><div class="rq-text">' + escapeHtml(replyTo.preview || '') + '</div></div>';
+}
+
+/* ---------- unified room selection (replaces old entry/chatScreen flow) ---------- */
+const chatEmptyPanel = document.getElementById('chatEmptyPanel');
+const chatLockedPanel = document.getElementById('chatLockedPanel');
+const chatMessagesWrap = document.getElementById('chatMessages');
+const chatBoxEl = document.getElementById('chatBox');
+const composerEl = document.getElementById('composer');
+const chatTabButtons = document.querySelectorAll('#chatTabsRow .page-tab');
+let currentChatKey = '1'; // visual default only until a room is actually joined
+
+window.__chatCurrentPage = () => currentChatKey;
+window.__chatCurrentSubtitle = () => roomCode ? (roomCode === 'ADMIN' ? 'Admin Chat (Private)' : ('Room ' + parseInt(roomCode,10))) : 'Select a room to start chatting.';
+
+function setActiveChatTabUI(key){
+  chatTabButtons.forEach(tab => tab.classList.toggle('active', tab.dataset.room === key));
+  document.querySelector('#chatTabsRow .admin-tab').classList.toggle('unlocked-active', key === 'ADMIN' && window.adminUnlocked);
+  currentChatKey = (key === 'ADMIN') ? 'Admin' : key;
+  if(window.isChatSectionActive && window.isChatSectionActive()) window.updatePageCounter(currentChatKey);
+}
+
+function showChatEmpty(){ chatEmptyPanel.style.display = 'flex'; chatLockedPanel.style.display = 'none'; chatBoxEl.style.display = 'none'; composerEl.style.display = 'none'; }
+function showChatLocked(){ chatEmptyPanel.style.display = 'none'; chatLockedPanel.style.display = 'flex'; chatBoxEl.style.display = 'none'; composerEl.style.display = 'none'; }
+function showChatActive(){ chatEmptyPanel.style.display = 'none'; chatLockedPanel.style.display = 'none'; chatBoxEl.style.display = 'flex'; composerEl.style.display = 'flex'; }
+
+function selectChatRoom(key){
+  if(key === 'ADMIN' && !window.adminUnlocked){
+    setActiveChatTabUI('ADMIN');
+    leaveRoom();
+    showChatLocked();
+    openAdminGate('chatroom');
+    return;
+  }
+  setActiveChatTabUI(key);
+  leaveRoom();
+  const code = (key === 'ADMIN') ? 'ADMIN' : String(parseInt(key,10)).padStart(2,'0');
+  roomCode = code;
+  showChatActive();
+  joinRoomInternal(code, () => { showToast('Connection issue — retrying...'); });
+}
+window.__chatSelectRoom = selectChatRoom;
+chatTabButtons.forEach(btn => btn.addEventListener('click', () => selectChatRoom(btn.dataset.room)));
+selectChatRoom('1');
+
+function joinRoomInternal(code, onError){
+  messagesRef = db.ref('rooms/' + code + '/messages');
+  participantsRef = db.ref('rooms/' + code + '/participants');
+  myParticipantRef = participantsRef.child(myId);
+  myParticipantRef.set(true).then(() => {
+    myParticipantRef.onDisconnect().remove();
+    setupListeners();
+  }).catch((err) => { console.error(err); if(onError) onError(); });
+}
+function leaveRoom(){
+  if(myParticipantRef) myParticipantRef.remove().catch(err => console.error(err));
+  if(messagesRef) messagesRef.off();
+  if(participantsRef) participantsRef.off();
+  messagesRef = null; participantsRef = null; myParticipantRef = null; roomCode = '';
+  seenMessageIds.clear();
+  Object.keys(messageMeta).forEach(k => delete messageMeta[k]);
+  messagesEl.innerHTML = '';
+  cancelActionBar();
+}
+
+function setupListeners(){
+  participantsRef.on('value', (snap) => { /* presence tracked silently */ });
+  messagesRef.on('child_added', (snap) => {
+    const key = snap.key;
+    if(seenMessageIds.has(key)) return;
+    seenMessageIds.add(key);
+    const msg = snap.val();
+    if(msg.type === 'text') addTextBubble(key, msg.text, false, msg.time, msg.replyTo, msg.edited, msg.sender);
+    else if(msg.type === 'file') addFileBubble(key, msg);
+    else if(msg.type === 'imagegroup') addImageGroupBubble(key, msg);
+  });
+  messagesRef.on('child_changed', (snap) => {
+    const key = snap.key; const msg = snap.val();
+    if(msg.type !== 'text') return;
+    const meta = messageMeta[key]; if(meta) meta.text = msg.text;
+    const row = document.getElementById('msgrow-' + key); if(!row) return;
+    const bubble = row.querySelector('.bubble'); if(!bubble) return;
+    const timeEl = bubble.querySelector('.time');
+    const replyHtml = renderReplyQuoteHtml(msg.replyTo);
+    bubble.innerHTML = replyHtml + escapeHtml(msg.text) + (msg.edited ? '<span class="edited-tag">(edited)</span>' : '') + (timeEl ? timeEl.outerHTML : '<div class="time">' + (msg.time || nowTime()) + '</div>');
+  });
+  messagesRef.on('child_removed', (snap) => {
+    seenMessageIds.delete(snap.key); delete messageMeta[snap.key];
+    const row = document.getElementById('msgrow-' + snap.key); if(row) row.remove();
+    if(replyingTo && replyingTo.id === snap.key) cancelActionBar();
+    if(editingId === snap.key) cancelActionBar();
+  });
+}
+
+/* unified delete icon (tab row) — clears current room's messages + files */
+document.getElementById('chatDeleteBtn').addEventListener('click', () => {
+  if(!roomCode){ showToast('No room selected'); return; }
+  if(currentChatKey === 'Admin' && !window.adminUnlocked){ showToast('Unlock Admin first'); return; }
+  if(!confirm('All messages and files in this room will be permanently deleted. Continue?')) return;
+  Promise.all([ messagesRef.remove(), db.ref('rooms/' + roomCode + '/fileChunks').remove() ]).then(() => {
+    document.getElementById('chatMessages').innerHTML = '';
+    seenMessageIds.clear();
+  }).catch((err) => console.error(err));
+});
+
+const messagesEl = document.getElementById('chatMessages');
+function addSysMessage(text, id){
+  const row = document.createElement('div'); row.className = 'msg-row sys'; if(id) row.id = 'msgrow-' + id;
+  row.innerHTML = '<div class="sys-note">' + escapeHtml(text) + '</div>'; messagesEl.appendChild(row); scrollToBottom();
+}
+function addTextBubble(id, text, mine, time, replyTo, edited, senderId){
+  const row = document.createElement('div'); row.className = 'msg-row ' + (mine ? 'me' : 'them'); row.id = 'msgrow-' + id;
+  row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(replyTo) + escapeHtml(text) + (edited ? '<span class="edited-tag">(edited)</span>' : '') + '<div class="time">' + (time || nowTime()) + '</div></div>';
+  messagesEl.appendChild(row);
+  messageMeta[id] = { type: 'text', mine, text, sender: senderId || (mine ? myId : 'peer') };
+  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+}
+function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+const textInput = document.getElementById('textInput');
+const sendBtn = document.getElementById('sendBtn');
+textInput.addEventListener('input', () => { textInput.style.height = 'auto'; textInput.style.height = Math.min(textInput.scrollHeight, 100) + 'px'; });
+textInput.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendText(); } });
+sendBtn.onclick = sendText;
+function sendText(){
+  const val = textInput.value.trim();
+  if(!val) return;
+  if(!messagesRef){ showToast('No room joined'); return; }
+  if(editingId){
+    const id = editingId;
+    messagesRef.child(id).update({ text: val, edited: true }).catch(err => console.error(err));
+    cancelActionBar(); return;
+  }
+  const msgRef = messagesRef.push(); const msgId = msgRef.key; seenMessageIds.add(msgId);
+  const time = nowTime();
+  const replyPayload = replyingTo ? { id: replyingTo.id, sender: replyingTo.sender, preview: replyingTo.preview } : null;
+  addTextBubble(msgId, val, true, time, replyPayload);
+  const payload = { type:'text', text: val, sender: myId, time };
+  if(replyPayload) payload.replyTo = replyPayload;
+  msgRef.set(payload).catch(err => console.error(err));
+  textInput.value = ''; textInput.style.height = 'auto';
+  if(replyingTo){ replyingTo = null; actionBarEl.style.display = 'none'; }
+}
+
+/* ---------- Fullscreen image preview viewer ---------- */
+const imgViewer = document.getElementById('imgViewer');
+const imgViewerImg = document.getElementById('imgViewerImg');
+const imgViewerClose = document.getElementById('imgViewerClose');
+const imgViewerNavRow = document.getElementById('imgViewerNavRow');
+const imgViewerPrev = document.getElementById('imgViewerPrev');
+const imgViewerNext = document.getElementById('imgViewerNext');
+const imgViewerCounter = document.getElementById('imgViewerCounter');
+let previewEntries = []; let previewIndex = 0;
+function renderPreviewFrame(){
+  const e = previewEntries[previewIndex]; if(!e) return;
+  imgViewerImg.src = e.url;
+  document.getElementById('imgViewerName').textContent = e.name || '';
+  document.getElementById('imgViewerSize').textContent = (e.size != null) ? fmtSize(e.size) : '';
+  if(previewEntries.length > 1){ imgViewerNavRow.classList.remove('hidden'); imgViewerCounter.textContent = (previewIndex + 1) + ' / ' + previewEntries.length; }
+  else imgViewerNavRow.classList.add('hidden');
+}
+function openImagePreview(entries, idx){ previewEntries = Array.isArray(entries) ? entries : [entries]; previewIndex = idx || 0; renderPreviewFrame(); imgViewer.classList.add('show'); }
+function closeImagePreview(){ imgViewer.classList.remove('show'); imgViewerImg.src = ''; previewEntries = []; previewIndex = 0; }
+function showPrevPreview(){ if(!previewEntries.length) return; previewIndex = (previewIndex - 1 + previewEntries.length) % previewEntries.length; renderPreviewFrame(); }
+function showNextPreview(){ if(!previewEntries.length) return; previewIndex = (previewIndex + 1) % previewEntries.length; renderPreviewFrame(); }
+imgViewerClose.onclick = closeImagePreview; imgViewerPrev.onclick = showPrevPreview; imgViewerNext.onclick = showNextPreview;
+imgViewer.addEventListener('click', (e) => { if(e.target === imgViewer) closeImagePreview(); });
+
+const attachBtn = document.getElementById('attachBtn');
+const fileInput = document.getElementById('fileInput');
+attachBtn.onclick = () => fileInput.click();
+fileInput.onchange = () => { handleIncomingFiles(fileInput.files); fileInput.value = ''; };
+function handleIncomingFiles(fileList){
+  const files = Array.from(fileList || []); if(!files.length) return;
+  const images = files.filter(f => f.type && f.type.startsWith('image/'));
+  const others = files.filter(f => !(f.type && f.type.startsWith('image/')));
+  if(images.length) sendImageGroup(images);
+  others.forEach(f => sendFile(f));
+}
+
+/* ---------- Drag & Drop support ---------- */
+const dropOverlay = document.getElementById('dropOverlay');
+let dragCounter = 0;
+function isChatActive(){ return window.isChatSectionActive() && !!roomCode; }
+window.addEventListener('dragenter', (e) => { e.preventDefault(); if(!isChatActive()) return; dragCounter++; dropOverlay.classList.add('show'); });
+window.addEventListener('dragover', (e) => { e.preventDefault(); if(!isChatActive()) return; if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+window.addEventListener('dragleave', (e) => { e.preventDefault(); if(!isChatActive()) return; dragCounter--; if(dragCounter <= 0){ dragCounter = 0; dropOverlay.classList.remove('show'); } });
+window.addEventListener('drop', (e) => {
+  e.preventDefault(); if(!isChatActive()) return; dragCounter = 0; dropOverlay.classList.remove('show');
+  if(!e.dataTransfer) return;
+  const files = Array.from(e.dataTransfer.files || []); if(!files.length) return;
+  handleIncomingFiles(files);
+});
+
+/* ---------- Grouped image messages ---------- */
+function buildImageGridMarkup(id, entries, sending){
+  const total = entries.length;
+  const visibleCount = Math.min(total, 4);
+  let cls = 'img-group';
+  if(total === 1) cls += ' n1'; else if(total === 2) cls += ' n2'; else if(total === 3) cls += ' n3'; else cls += ' n4plus';
+  let tiles = '';
+  for(let i=0;i<visibleCount;i++){
+    const e = entries[i];
+    const isLastDimmed = (total > 4 && i === visibleCount - 1);
+    tiles += '<div class="img-tile" data-idx="' + i + '">' +
+      '<img src="' + e.url + '" alt="">' +
+      (isLastDimmed ? '<div class="more-overlay">+' + (total - visibleCount + 1) + '</div>' : '') +
+      '</div>';
+  }
+  return '<div class="img-group ' + cls + '" data-msgid="' + id + '">' + tiles + '</div>' +
+    '<div class="img-dl-row"><button class="img-dl-btn" data-msgid="' + id + '" title="Save"><i class="fa-solid fa-download"></i></button></div>';
+}
+function wireImageGrid(id, entries){
+  const group = document.querySelector('.img-group[data-msgid="' + id + '"]');
+  if(group){
+    group.querySelectorAll('.img-tile').forEach((tile) => {
+      tile.addEventListener('click', () => openImagePreview(entries, parseInt(tile.dataset.idx, 10)));
+    });
+  }
+  const dlBtn = document.querySelector('.img-dl-btn[data-msgid="' + id + '"]');
+  if(dlBtn){
+    dlBtn.onclick = () => {
+      entries.forEach((e) => { const a = document.createElement('a'); a.href = e.url; a.download = e.name; document.body.appendChild(a); a.click(); a.remove(); });
+    };
+  }
+}
+
+function sendImageGroup(files){
+  if(!messagesRef){ showToast('No room joined'); return; }
+  const id = 'local' + Date.now();
+  const groupId = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
+  const localUrls = files.map(f => URL.createObjectURL(f));
+  const row = document.createElement('div');
+  row.className = 'msg-row me'; row.id = 'msgrow-' + id;
+  row.innerHTML = '<div class="bubble">' +
+    buildImageGridMarkup(id, files.map((f,i)=>({url:localUrls[i], name:f.name, size:f.size})), true) +
+    '<div class="time">' + nowTime() + '</div></div>';
+  messagesEl.appendChild(row);
+  wireImageGrid(id, files.map((f,i)=>({url:localUrls[i], name:f.name, size:f.size})));
+  attachLongPress(row.querySelector('.bubble'), id);
+  messageMeta[id] = { type: 'imagegroup', mine: true, sender: myId, count: files.length, name: files[0].name };
+  scrollToBottom();
+
+  const images = [];
+  let chain = Promise.resolve();
+  files.forEach((file) => {
+    chain = chain.then(() => {
+      const gid = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
+      return uploadFileChunks(file, gid, id).then((chunkCount) => {
+        images.push({ groupId: gid, name: file.name, size: file.size, mime: file.type, chunkCount });
+      });
+    });
+  });
+  chain.then(() => {
+    const msgRef = messagesRef.push(); const msgId = msgRef.key; seenMessageIds.add(msgId);
+    return msgRef.set({ type:'imagegroup', sender: myId, images, time: nowTime() });
+  }).catch((err) => { console.error(err); showToast('Error sending images'); });
+}
+
+function addImageGroupBubble(id, msg){
+  const row = document.createElement('div'); row.className = 'msg-row them'; row.id = 'msgrow-' + id;
+  row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(msg.replyTo) +
+    '<div class="img-status" id="imgstatus-' + id + '">Loading photos...</div>' +
+    '<div class="time">' + (msg.time || nowTime()) + '</div></div>';
+  messagesEl.appendChild(row);
+  messageMeta[id] = { type: 'imagegroup', mine: false, sender: msg.sender, count: msg.images.length, name: msg.images[0].name, groupIds: msg.images.map(im => im.groupId) };
+  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+
+  Promise.all(msg.images.map((imgSpec) =>
+    db.ref('rooms/' + roomCode + '/fileChunks/' + imgSpec.groupId).once('value').then((snap) => {
+      const val = snap.val() || {}; const parts = [];
+      for(let i=0;i<imgSpec.chunkCount;i++){ const b64 = val[i]; if(b64) parts.push(base64ToBytes(b64)); }
+      const blob = new Blob(parts, { type: imgSpec.mime });
+      return { url: URL.createObjectURL(blob), name: imgSpec.name, size: imgSpec.size };
+    })
+  )).then((entries) => {
+    const r = document.getElementById('msgrow-' + id); if(!r) return;
+    const bubble = r.querySelector('.bubble');
+    const statusEl = document.getElementById('imgstatus-' + id); if(statusEl) statusEl.remove();
+    const timeEl = bubble.querySelector('.time');
+    const gridHtml = buildImageGridMarkup(id, entries, false);
+    if(timeEl) timeEl.insertAdjacentHTML('beforebegin', gridHtml); else bubble.insertAdjacentHTML('beforeend', gridHtml);
+    wireImageGrid(id, entries);
+  }).catch((err) => console.error(err));
+}
+
+function renderOutgoingFileRow(id, file, isImage, groupId, replyTo){
+  const row = document.createElement('div'); row.className = 'msg-row me'; row.id = 'msgrow-' + id;
+  const name = file.name, size = file.size;
+  row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(replyTo) +
+    '<div class="file-card' + (isImage ? ' is-image' : '') + '">' +
+      '<div class="fc-icon">' + (isImage ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}') + '</div>' +
+      '<div class="fc-info"><div class="fc-name">' + escapeHtml(name) + '</div>' +
+        '<div class="fc-size">' + fmtSize(size) + ' - sending...</div>' +
+        '<div class="fc-progress-row"><div class="fc-progress"><div class="fc-progress-fill" id="sprog-' + id + '"></div></div>' +
+        '<div class="fc-pct" id="spct-' + id + '">0%</div></div></div></div>' +
+    '<div class="time">' + nowTime() + '</div></div>';
+  messagesEl.appendChild(row);
+  if(isImage){
+    const localUrl = URL.createObjectURL(file);
+    const img = document.createElement('img'); img.src = localUrl; img.onclick = () => openImagePreview([{ url: localUrl, name, size }], 0);
+    const card = row.querySelector('.file-card');
+    row.querySelector('.bubble').insertBefore(img, card);
+  }
+  messageMeta[id] = { type: 'file', mine: true, sender: myId, name, groupId };
+  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+}
+
+async function uploadFileChunks(file, groupId, rowId){
+  const total = file.size;
+  const chunkCount = Math.max(1, Math.ceil(total / CHUNK_RAW_SIZE));
+  for(let i=0;i<chunkCount;i++){
+    const start = i * CHUNK_RAW_SIZE; const end = Math.min(total, start + CHUNK_RAW_SIZE);
+    const slice = file.slice(start, end); const buf = await slice.arrayBuffer(); const b64 = abToBase64(buf);
+    await db.ref('rooms/' + roomCode + '/fileChunks/' + groupId + '/' + i).set(b64);
+    const pct = Math.round(((i+1)/chunkCount)*100);
+    const bar = document.getElementById('sprog-' + rowId); const pctEl = document.getElementById('spct-' + rowId);
+    if(bar) bar.style.width = pct + '%'; if(pctEl) pctEl.textContent = pct + '%';
+  }
+  const sizeEl = document.querySelector('#msgrow-' + rowId + ' .fc-size');
+  if(sizeEl) sizeEl.textContent = fmtSize(total) + ' - sent';
+  return chunkCount;
+}
+
+function sendFile(file){
+  if(!messagesRef){ showToast('No room joined'); return; }
+  if(file.type && file.type.startsWith('image/')){ sendImageGroup([file]); return; }
+  if(file.size > MAX_FILE_MB * 1024 * 1024){ showToast('"' + file.name + '" too big (max ' + MAX_FILE_MB + 'MB)'); return; }
+  const groupId = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
+  const msgRef = messagesRef.push(); const msgId = msgRef.key; seenMessageIds.add(msgId);
+  const replyPayload = replyingTo ? { id: replyingTo.id, sender: replyingTo.sender, preview: replyingTo.preview } : null;
+  if(replyingTo){ replyingTo = null; actionBarEl.style.display = 'none'; }
+  renderOutgoingFileRow(msgId, file, false, groupId, replyPayload);
+  uploadFileChunks(file, groupId, msgId).then((chunkCount) => {
+    const payload = { type:'file', sender: myId, name:file.name, size:file.size, mime:file.type, isImage:false, groupId, chunkCount, time: nowTime() };
+    if(replyPayload) payload.replyTo = replyPayload;
+    return msgRef.set(payload);
+  }).catch((err) => { console.error(err); showToast('Error sending file'); });
+}
+
+function addFileBubble(id, msg){
+  const row = document.createElement('div'); row.className = 'msg-row them'; row.id = 'msgrow-' + id;
+  row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(msg.replyTo) +
+    '<div class="file-card' + (msg.isImage ? ' is-image' : '') + '">' +
+      '<div class="fc-icon">' + (msg.isImage ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}') + '</div>' +
+      '<div class="fc-info"><div class="fc-name">' + escapeHtml(msg.name) + '</div><div class="fc-size">' + fmtSize(msg.size) + ' - receiving...</div></div></div>' +
+    '<div class="time">' + (msg.time || nowTime()) + '</div></div>';
+  messagesEl.appendChild(row);
+  messageMeta[id] = { type: 'file', mine: false, sender: msg.sender, name: msg.name, groupId: msg.groupId };
+  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+
+  db.ref('rooms/' + roomCode + '/fileChunks/' + msg.groupId).once('value').then((snap) => {
+    const val = snap.val() || {}; const parts = [];
+    for(let i=0;i<msg.chunkCount;i++){ const b64 = val[i]; if(b64) parts.push(base64ToBytes(b64)); }
+    const blob = new Blob(parts, { type: msg.mime }); const url = URL.createObjectURL(blob);
+    const r = document.getElementById('msgrow-' + id); if(!r) return;
+    const card = r.querySelector('.file-card'); const sizeEl = r.querySelector('.fc-size'); sizeEl.textContent = fmtSize(msg.size);
+    if(msg.isImage){ const img = document.createElement('img'); img.src = url; img.onclick = () => openImagePreview([{ url, name: msg.name, size: msg.size }], 0); r.querySelector('.bubble').insertBefore(img, card); }
+    const dlBtn = document.createElement('button'); dlBtn.className = 'fc-dl'; dlBtn.textContent = 'Save';
+    dlBtn.onclick = () => { const a = document.createElement('a'); a.href = url; a.download = msg.name; document.body.appendChild(a); a.click(); a.remove(); };
+    card.appendChild(dlBtn);
+  }).catch((err) => console.error(err));
+}
+</script>
+</body>
+</html>
