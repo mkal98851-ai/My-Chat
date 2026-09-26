@@ -263,7 +263,9 @@ body{
 .img-tile img{ width:100%; height:100%; object-fit:cover; display:block; } .img-group.n1 .img-tile img{ width:auto; height:auto; max-width:220px; max-height:220px; object-fit:cover; }
 .img-tile .more-overlay{ position:absolute; inset:0; background:rgba(0,0,0,0.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700;}
 .img-status{ font-size:10.5px; color:var(--text-dim); margin:2px 2px 0; } .img-dl-row{ display:flex; justify-content:flex-end; align-items:center; gap:7px; margin-top:4px; }
-.img-send-pct{ font-size:11px; color:var(--text-dim); font-weight:600; }
+.img-send-progress{ flex:1; height:2px; background:rgba(0,0,0,0.2); border-radius:2px; overflow:hidden; }
+.img-send-fill{ height:100%; background:currentColor; width:0%; transition:width .2s; }
+.img-send-pct{ font-size:11px; color:currentColor; font-weight:600; }
 .img-dl-btn{ width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.35); border:none; color:#fff; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
 #ctxBackdrop{ position:fixed; inset:0; z-index:200; display:none; background:rgba(0,0,0,0.15); }
 #ctxMenu{ position:fixed; z-index:201; display:none; min-width:150px; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);}
@@ -1285,9 +1287,11 @@ function buildImageGridMarkup(id, entries, sending){
       (isLastDimmed ? '<div class="more-overlay">+' + (total - visibleCount + 1) + '</div>' : '') +
       '</div>';
   }
-  const pctSpan = sending ? '<span class="img-send-pct" id="imgpct-' + id + '">0%</span>' : '';
+  const pctBlock = sending
+    ? '<div class="img-send-progress"><div class="img-send-fill" id="imgbar-' + id + '"></div></div><span class="img-send-pct" id="imgpct-' + id + '">0%</span>'
+    : '';
   return '<div class="img-group ' + cls + '" data-msgid="' + id + '">' + tiles + '</div>' +
-    '<div class="img-dl-row">' + pctSpan + '<button class="img-dl-btn" data-msgid="' + id + '" title="Save"><i class="fa-solid fa-download"></i></button></div>';
+    '<div class="img-dl-row">' + pctBlock + '<button class="img-dl-btn" data-msgid="' + id + '" title="Save"><i class="fa-solid fa-download"></i></button></div>';
 }
 function wireImageGrid(id, entries){
   const group = document.querySelector('.img-group[data-msgid="' + id + '"]');
@@ -1323,14 +1327,15 @@ function sendImageGroup(files){
   const totalBytes = files.reduce((s,f) => s + f.size, 0);
   let bytesDoneBeforeCurrentFile = 0;
   const pctEl = document.getElementById('imgpct-' + id);
+  const barEl = document.getElementById('imgbar-' + id);
   let chain = Promise.resolve();
   files.forEach((file) => {
     chain = chain.then(() => {
       const gid = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
       return uploadFileChunks(file, gid, id, (sentInFile) => {
-        if(!pctEl) return;
         const pct = totalBytes > 0 ? Math.round(((bytesDoneBeforeCurrentFile + sentInFile) / totalBytes) * 100) : 100;
-        pctEl.textContent = pct + '%';
+        if(pctEl) pctEl.textContent = pct + '%';
+        if(barEl) barEl.style.width = pct + '%';
       }).then((chunkCount) => {
         images.push({ groupId: gid, name: file.name, size: file.size, mime: file.type, chunkCount });
         bytesDoneBeforeCurrentFile += file.size;
@@ -1338,7 +1343,8 @@ function sendImageGroup(files){
     });
   });
   chain.then(() => {
-    if(pctEl) pctEl.remove();
+    if(barEl) barEl.parentElement.remove(); // drop the progress track
+    if(pctEl) pctEl.remove(); // drop the percentage text once sending completes
     return msgRef.set({ type:'imagegroup', sender: myId, images, time: nowTime() });
   }).catch((err) => { console.error(err); showToast('Error sending images'); });
 }
