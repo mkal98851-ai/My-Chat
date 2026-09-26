@@ -204,8 +204,10 @@ body{
   display:flex; flex-direction:column; overflow:hidden;
 }
 #chatMessages{
-  flex:1; overflow-y:auto; padding:6px 4px; display:flex; flex-direction:column; gap:8px; min-height:0;
+  flex:1; overflow-y:auto; padding:6px 4px; display:flex; flex-direction:column; min-height:0;
 }
+.room-msg-container{ display:none; flex-direction:column; gap:8px; }
+.room-msg-container.active{ display:flex; }
 .msg-row{ display:flex; }
 .msg-row.me{ justify-content:flex-end; } .msg-row.them{ justify-content:flex-start; } .msg-row.sys{ justify-content:center; }
 .sys-note{ font-size:11px; color:var(--text-dim); background:var(--panel); padding:5px 12px; border-radius:20px; border:1px solid var(--line); }
@@ -260,7 +262,8 @@ body{
 .img-tile{ position:relative; aspect-ratio:1/1; overflow:hidden; cursor:pointer; } .img-group.n1 .img-tile{ aspect-ratio:auto; }
 .img-tile img{ width:100%; height:100%; object-fit:cover; display:block; } .img-group.n1 .img-tile img{ width:auto; height:auto; max-width:220px; max-height:220px; object-fit:cover; }
 .img-tile .more-overlay{ position:absolute; inset:0; background:rgba(0,0,0,0.55); color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700;}
-.img-status{ font-size:10.5px; color:var(--text-dim); margin:2px 2px 0; } .img-dl-row{ display:flex; justify-content:flex-end; margin-top:4px; }
+.img-status{ font-size:10.5px; color:var(--text-dim); margin:2px 2px 0; } .img-dl-row{ display:flex; justify-content:flex-end; align-items:center; gap:7px; margin-top:4px; }
+.img-send-pct{ font-size:11px; color:var(--text-dim); font-weight:600; }
 .img-dl-btn{ width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.35); border:none; color:#fff; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;}
 #ctxBackdrop{ position:fixed; inset:0; z-index:200; display:none; background:rgba(0,0,0,0.15); }
 #ctxMenu{ position:fixed; z-index:201; display:none; min-width:150px; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);}
@@ -1013,7 +1016,14 @@ const chatEmptyPanel = document.getElementById('chatEmptyPanel');
 const chatLockedPanel = document.getElementById('chatLockedPanel');
 chatLockedPanel.addEventListener('click', () => openAdminGate('chatroom'));
 const chatMessagesWrap = document.getElementById('chatMessages');
-const messagesEl = chatMessagesWrap;
+/* messagesEl / seenMessageIds / messagesRef / participantsRef / myParticipantRef
+   are now "live pointers" that get repointed (not recreated) to whichever
+   room is active — see roomRegistry + switchToRoom() below. This is what
+   lets already-visited rooms keep receiving messages/files/images in the
+   background while a different room is on screen, so switching back shows
+   them instantly instead of waiting for Firebase to resync. */
+const roomRegistry = {};
+let messagesEl = null;
 const chatBoxEl = document.getElementById('chatBox');
 const composerEl = document.getElementById('composer');
 const chatTabButtons = document.querySelectorAll('#chatTabsRow .page-tab');
@@ -1036,52 +1046,91 @@ function showChatActive(){ chatEmptyPanel.style.display = 'none'; chatLockedPane
 function selectChatRoom(key){
   if(key === 'ADMIN' && !window.adminUnlocked){
     setActiveChatTabUI('ADMIN');
-    leaveRoom();
+    deactivateCurrentRoom();
     showChatLocked();
     openAdminGate('chatroom');
     return;
   }
   if(currentChatKey === 'Admin' && key !== 'ADMIN') window.lockAdmin();
   setActiveChatTabUI(key);
-  leaveRoom();
   const code = (key === 'ADMIN') ? 'ADMIN' : String(parseInt(key,10)).padStart(2,'0');
-  roomCode = code;
   showChatActive();
-  joinRoomInternal(code, () => { showToast('Connection issue — retrying...'); });
+  switchToRoom(code);
 }
 window.__chatSelectRoom = selectChatRoom;
-function joinRoomInternal(code, onError){
-  messagesRef = db.ref('rooms/' + code + '/messages');
-  participantsRef = db.ref('rooms/' + code + '/participants');
-  myParticipantRef = participantsRef.child(myId);
-  myParticipantRef.set(true).then(() => {
-    myParticipantRef.onDisconnect().remove();
-    setupListeners();
-  }).catch((err) => { console.error(err); if(onError) onError(); });
-}
-function leaveRoom(){
-  if(myParticipantRef) myParticipantRef.remove().catch(err => console.error(err));
-  if(messagesRef) messagesRef.off();
-  if(participantsRef) participantsRef.off();
-  messagesRef = null; participantsRef = null; myParticipantRef = null; roomCode = '';
-  seenMessageIds.clear();
-  Object.keys(messageMeta).forEach(k => delete messageMeta[k]);
-  messagesEl.innerHTML = '';
+
+/* Hide the current room's UI without tearing down its Firebase listeners —
+   used only for the admin-locked gate, where no other room becomes active. */
+function deactivateCurrentRoom(){
+  if(roomCode && roomRegistry[roomCode]){
+    const old = roomRegistry[roomCode];
+    old.scrollPos = old.container.scrollTop;
+    old.container.classList.remove('active');
+    if(old.myParticipantRef) old.myParticipantRef.remove().catch(err => console.error(err));
+  }
   cancelActionBar();
+  roomCode = '';
 }
 
-function setupListeners(){
-  participantsRef.on('value', (snap) => { /* presence tracked silently */ });
-  messagesRef.on('child_added', (snap) => {
+/* Switch the visible room. A room visited earlier in this session keeps its
+   messagesRef listener attached in the background the whole time, so its
+   text/files/images are already rendered into its own hidden container —
+   switching to it is just a visibility toggle, no Firebase wait at all.
+   Only a room's first-ever visit pays the network sync cost. */
+function switchToRoom(code){
+  deactivateCurrentRoom();
+  roomCode = code;
+
+  let ctx = roomRegistry[code];
+  if(!ctx){
+    const container = document.createElement('div');
+    container.className = 'room-msg-container';
+    chatMessagesWrap.appendChild(container);
+    ctx = roomRegistry[code] = {
+      container, seen: new Set(),
+      messagesRef: db.ref('rooms/' + code + '/messages'),
+      participantsRef: db.ref('rooms/' + code + '/participants'),
+      myParticipantRef: null, scrollPos: 0, attached: false
+    };
+    ctx.myParticipantRef = ctx.participantsRef.child(myId);
+  }
+
+  /* repoint the live globals at this room's own state */
+  messagesEl = ctx.container;
+  seenMessageIds = ctx.seen;
+  messagesRef = ctx.messagesRef;
+  participantsRef = ctx.participantsRef;
+  myParticipantRef = ctx.myParticipantRef;
+
+  ctx.container.classList.add('active');
+  ctx.container.scrollTop = ctx.scrollPos || ctx.container.scrollHeight;
+
+  if(!ctx.attached){
+    ctx.attached = true;
+    setupListenersForRoom(code, ctx);
+  }
+
+  myParticipantRef.set(true).then(() => {
+    myParticipantRef.onDisconnect().remove();
+  }).catch((err) => { console.error(err); showToast('Connection issue — retrying...'); });
+}
+
+/* Attached exactly once per room, the first time it's visited, and left
+   running for the rest of the session — even while another room is on
+   screen — so new messages/files/images keep arriving into that room's
+   own (possibly hidden) container instead of waiting to be re-fetched. */
+function setupListenersForRoom(code, ctx){
+  ctx.participantsRef.on('value', (snap) => { /* presence tracked silently */ });
+  ctx.messagesRef.on('child_added', (snap) => {
     const key = snap.key;
-    if(seenMessageIds.has(key)) return;
-    seenMessageIds.add(key);
+    if(ctx.seen.has(key)) return;
+    ctx.seen.add(key);
     const msg = snap.val();
-    if(msg.type === 'text') addTextBubble(key, msg.text, false, msg.time, msg.replyTo, msg.edited, msg.sender);
-    else if(msg.type === 'file') addFileBubble(key, msg);
-    else if(msg.type === 'imagegroup') addImageGroupBubble(key, msg);
+    if(msg.type === 'text') addTextBubble(key, msg.text, false, msg.time, msg.replyTo, msg.edited, msg.sender, ctx.container);
+    else if(msg.type === 'file') addFileBubble(key, msg, ctx.container);
+    else if(msg.type === 'imagegroup') addImageGroupBubble(key, msg, ctx.container);
   });
-  messagesRef.on('child_changed', (snap) => {
+  ctx.messagesRef.on('child_changed', (snap) => {
     const key = snap.key; const msg = snap.val();
     if(msg.type !== 'text') return;
     const meta = messageMeta[key]; if(meta) meta.text = msg.text;
@@ -1091,8 +1140,8 @@ function setupListeners(){
     const replyHtml = renderReplyQuoteHtml(msg.replyTo);
     bubble.innerHTML = replyHtml + escapeHtml(msg.text) + (msg.edited ? '<span class="edited-tag">(edited)</span>' : '') + (timeEl ? timeEl.outerHTML : '<div class="time">' + (msg.time || nowTime()) + '</div>');
   });
-  messagesRef.on('child_removed', (snap) => {
-    seenMessageIds.delete(snap.key); delete messageMeta[snap.key];
+  ctx.messagesRef.on('child_removed', (snap) => {
+    ctx.seen.delete(snap.key); delete messageMeta[snap.key];
     const row = document.getElementById('msgrow-' + snap.key); if(row) row.remove();
     if(replyingTo && replyingTo.id === snap.key) cancelActionBar();
     if(editingId === snap.key) cancelActionBar();
@@ -1105,7 +1154,7 @@ document.getElementById('chatDeleteBtn').addEventListener('click', () => {
   if(currentChatKey === 'Admin' && !window.adminUnlocked){ showToast('Unlock Admin first'); return; }
   if(!confirm('All messages and files in this room will be permanently deleted. Continue?')) return;
   Promise.all([ messagesRef.remove(), db.ref('rooms/' + roomCode + '/fileChunks').remove() ]).then(() => {
-    document.getElementById('chatMessages').innerHTML = '';
+    messagesEl.innerHTML = '';
     seenMessageIds.clear();
   }).catch((err) => console.error(err));
 });
@@ -1120,10 +1169,12 @@ document.getElementById('chatMasterDeleteBtn').addEventListener('click', () => {
     jobs.push(db.ref('rooms/' + code + '/fileChunks').remove());
   });
   Promise.all(jobs).then(() => {
-    if(CHAT_MASTER_CLEAR_ROOMS.includes(roomCode)){
-      document.getElementById('chatMessages').innerHTML = '';
-      seenMessageIds.clear();
-    }
+    /* clear cached DOM/state for every affected room, not just the one on screen,
+       so a previously-visited hidden room doesn't briefly show stale messages */
+    CHAT_MASTER_CLEAR_ROOMS.forEach((code) => {
+      const ctx = roomRegistry[code];
+      if(ctx){ ctx.container.innerHTML = ''; ctx.seen.clear(); }
+    });
     showToast('All chat rooms cleared (Admin untouched)!');
     closeSettings();
   }).catch((err) => { console.error(err); showToast('Error clearing chat rooms'); });
@@ -1133,12 +1184,14 @@ function addSysMessage(text, id){
   const row = document.createElement('div'); row.className = 'msg-row sys'; if(id) row.id = 'msgrow-' + id;
   row.innerHTML = '<div class="sys-note">' + escapeHtml(text) + '</div>'; messagesEl.appendChild(row); scrollToBottom();
 }
-function addTextBubble(id, text, mine, time, replyTo, edited, senderId){
+function addTextBubble(id, text, mine, time, replyTo, edited, senderId, container){
+  const target = container || messagesEl;
   const row = document.createElement('div'); row.className = 'msg-row ' + (mine ? 'me' : 'them'); row.id = 'msgrow-' + id;
   row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(replyTo) + escapeHtml(text) + (edited ? '<span class="edited-tag">(edited)</span>' : '') + '<div class="time">' + (time || nowTime()) + '</div></div>';
-  messagesEl.appendChild(row);
+  target.appendChild(row);
   messageMeta[id] = { type: 'text', mine, text, sender: senderId || (mine ? myId : 'peer') };
-  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+  attachLongPress(row.querySelector('.bubble'), id);
+  if(target === messagesEl) scrollToBottom();
 }
 function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
 
@@ -1232,8 +1285,9 @@ function buildImageGridMarkup(id, entries, sending){
       (isLastDimmed ? '<div class="more-overlay">+' + (total - visibleCount + 1) + '</div>' : '') +
       '</div>';
   }
+  const pctSpan = sending ? '<span class="img-send-pct" id="imgpct-' + id + '">0%</span>' : '';
   return '<div class="img-group ' + cls + '" data-msgid="' + id + '">' + tiles + '</div>' +
-    '<div class="img-dl-row"><button class="img-dl-btn" data-msgid="' + id + '" title="Save"><i class="fa-solid fa-download"></i></button></div>';
+    '<div class="img-dl-row">' + pctSpan + '<button class="img-dl-btn" data-msgid="' + id + '" title="Save"><i class="fa-solid fa-download"></i></button></div>';
 }
 function wireImageGrid(id, entries){
   const group = document.querySelector('.img-group[data-msgid="' + id + '"]');
@@ -1266,28 +1320,39 @@ function sendImageGroup(files){
   scrollToBottom();
 
   const images = [];
+  const totalBytes = files.reduce((s,f) => s + f.size, 0);
+  let bytesDoneBeforeCurrentFile = 0;
+  const pctEl = document.getElementById('imgpct-' + id);
   let chain = Promise.resolve();
   files.forEach((file) => {
     chain = chain.then(() => {
       const gid = db.ref('rooms/' + roomCode + '/fileChunks').push().key;
-      return uploadFileChunks(file, gid, id).then((chunkCount) => {
+      return uploadFileChunks(file, gid, id, (sentInFile) => {
+        if(!pctEl) return;
+        const pct = totalBytes > 0 ? Math.round(((bytesDoneBeforeCurrentFile + sentInFile) / totalBytes) * 100) : 100;
+        pctEl.textContent = pct + '%';
+      }).then((chunkCount) => {
         images.push({ groupId: gid, name: file.name, size: file.size, mime: file.type, chunkCount });
+        bytesDoneBeforeCurrentFile += file.size;
       });
     });
   });
   chain.then(() => {
+    if(pctEl) pctEl.remove();
     return msgRef.set({ type:'imagegroup', sender: myId, images, time: nowTime() });
   }).catch((err) => { console.error(err); showToast('Error sending images'); });
 }
 
-function addImageGroupBubble(id, msg){
+function addImageGroupBubble(id, msg, container){
+  const target = container || messagesEl;
   const row = document.createElement('div'); row.className = 'msg-row them'; row.id = 'msgrow-' + id;
   row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(msg.replyTo) +
     '<div class="img-status" id="imgstatus-' + id + '">Loading photos...</div>' +
     '<div class="time">' + (msg.time || nowTime()) + '</div></div>';
-  messagesEl.appendChild(row);
+  target.appendChild(row);
   messageMeta[id] = { type: 'imagegroup', mine: false, sender: msg.sender, count: msg.images.length, name: msg.images[0].name, groupIds: msg.images.map(im => im.groupId) };
-  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+  attachLongPress(row.querySelector('.bubble'), id);
+  if(target === messagesEl) scrollToBottom();
 
   Promise.all(msg.images.map((imgSpec) =>
     db.ref('rooms/' + roomCode + '/fileChunks/' + imgSpec.groupId).once('value').then((snap) => {
@@ -1329,16 +1394,20 @@ function renderOutgoingFileRow(id, file, isImage, groupId, replyTo){
   attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
 }
 
-async function uploadFileChunks(file, groupId, rowId){
+async function uploadFileChunks(file, groupId, rowId, onProgress){
   const total = file.size;
   const chunkCount = Math.max(1, Math.ceil(total / CHUNK_RAW_SIZE));
   for(let i=0;i<chunkCount;i++){
     const start = i * CHUNK_RAW_SIZE; const end = Math.min(total, start + CHUNK_RAW_SIZE);
     const slice = file.slice(start, end); const buf = await slice.arrayBuffer(); const b64 = abToBase64(buf);
     await db.ref('rooms/' + roomCode + '/fileChunks/' + groupId + '/' + i).set(b64);
-    const pct = Math.round(((i+1)/chunkCount)*100);
-    const bar = document.getElementById('sprog-' + rowId); const pctEl = document.getElementById('spct-' + rowId);
-    if(bar) bar.style.width = pct + '%'; if(pctEl) pctEl.textContent = pct + '%';
+    if(onProgress){
+      onProgress(end, total);
+    } else {
+      const pct = Math.round((end/total)*100);
+      const bar = document.getElementById('sprog-' + rowId); const pctEl = document.getElementById('spct-' + rowId);
+      if(bar) bar.style.width = pct + '%'; if(pctEl) pctEl.textContent = pct + '%';
+    }
   }
   const sizeEl = document.querySelector('#msgrow-' + rowId + ' .fc-size');
   if(sizeEl) sizeEl.textContent = fmtSize(total) + ' - sent';
@@ -1361,16 +1430,18 @@ function sendFile(file){
   }).catch((err) => { console.error(err); showToast('Error sending file'); });
 }
 
-function addFileBubble(id, msg){
+function addFileBubble(id, msg, container){
+  const target = container || messagesEl;
   const row = document.createElement('div'); row.className = 'msg-row them'; row.id = 'msgrow-' + id;
   row.innerHTML = '<div class="bubble">' + renderReplyQuoteHtml(msg.replyTo) +
     '<div class="file-card' + (msg.isImage ? ' is-image' : '') + '">' +
       '<div class="fc-icon">' + (msg.isImage ? '\u{1F5BC}\uFE0F' : '\u{1F4C4}') + '</div>' +
       '<div class="fc-info"><div class="fc-name">' + escapeHtml(msg.name) + '</div><div class="fc-size">' + fmtSize(msg.size) + ' - receiving...</div></div></div>' +
     '<div class="time">' + (msg.time || nowTime()) + '</div></div>';
-  messagesEl.appendChild(row);
+  target.appendChild(row);
   messageMeta[id] = { type: 'file', mine: false, sender: msg.sender, name: msg.name, groupId: msg.groupId };
-  attachLongPress(row.querySelector('.bubble'), id); scrollToBottom();
+  attachLongPress(row.querySelector('.bubble'), id);
+  if(target === messagesEl) scrollToBottom();
 
   db.ref('rooms/' + roomCode + '/fileChunks/' + msg.groupId).once('value').then((snap) => {
     const val = snap.val() || {}; const parts = [];
